@@ -8,7 +8,13 @@ const CONFIG = {
   SHEET_GID: 200224574,    // gid ของแท็บฐานข้อมูล (ตัวเลขหลัง #gid= ในลิงก์ชีต)
   SHEET_NAME: '',          // ใช้เมื่อไม่ได้ใส่ SHEET_GID: ชื่อแท็บ เช่น 'Sheet1' (ว่าง = แท็บแรก)
   DATA_START_ROW: 6,       // แถวแรกของข้อมูล (แถว 1–5 เป็นหัวตาราง)
-  LOG_SHEET: 'ประวัติแก้ไข' // ชีตเก็บประวัติการแก้ไขจาก Web app
+  LOG_SHEET: 'ประวัติแก้ไข', // ชีตเก็บประวัติการแก้ไขจาก Web app
+  // ผู้ดูแลระบบ (Admin) มีสิทธิ์เพิ่ม แก้ไข และลบข้อมูล ใส่อีเมล Google ได้ 2 บัญชี
+  // ทุกบัญชีที่ไม่อยู่ในรายการนี้เป็น ผู้ดู (Viewer) ดูได้อย่างเดียว
+  ADMINS: [
+    'mixplus.w@gmail.com',  // Admin 1
+    ''                      // Admin 2: ใส่อีเมล เช่น 'name@gmail.com'
+  ]
 };
 const NCOL = 26; // คอลัมน์ A–Z
 const COLS = ['pcode','vno','vdate','caseId','refId','claimNo','company','pickup','wh','qty',
@@ -46,6 +52,19 @@ function sheet_() {
   return sh;
 }
 
+/** สิทธิ์ของผู้ใช้ที่เปิด Web app: 'admin' หรือ 'viewer' */
+function role_(email) {
+  email = String(email || '').trim().toLowerCase();
+  if (!email) return 'viewer';
+  const admins = CONFIG.ADMINS.map(function (x) { return String(x || '').trim().toLowerCase(); }).filter(String);
+  return admins.indexOf(email) >= 0 ? 'admin' : 'viewer';
+}
+function requireAdmin_() {
+  const email = Session.getActiveUser().getEmail() || '';
+  if (role_(email) !== 'admin') throw new Error('บัญชี ' + (email || 'นี้') + ' ดูข้อมูลได้อย่างเดียว ไม่มีสิทธิ์เพิ่ม แก้ไข หรือลบ (ติดต่อ Admin)');
+  return email;
+}
+
 /** ข้อมูลทั้งหมด: values[i] คือแถว start+i (แถวว่างส่งเป็น []) */
 function getData() {
   const sh = sheet_();
@@ -56,7 +75,8 @@ function getData() {
     start: CONFIG.DATA_START_ROW,
     values: vals.map(function (r) { return r.some(function (c) { return String(c).trim(); }) ? r : []; }),
     rev: getRev(),
-    user: Session.getActiveUser().getEmail() || ''
+    user: Session.getActiveUser().getEmail() || '',
+    role: role_(Session.getActiveUser().getEmail())
   };
 }
 
@@ -121,6 +141,7 @@ function saveBatch(b) {
   b = b || {};
   const updates = b.updates || [], deletes = b.deletes || [], ins = b.inserts || null;
   const insRows = ins && ins.rows ? ins.rows : [];
+  requireAdmin_();
   if (insRows.length > 300) throw new Error('เพิ่มได้ครั้งละไม่เกิน 300 แถว');
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -185,6 +206,7 @@ function deleteRows(items) { return saveBatch({ deletes: items }); }
 /** เขียนตารางสรุปจากแดชบอร์ดลงแท็บ (ใช้ต่อกับ Looker Studio / ระบบรายงาน)
  *  tables = { "ชื่อแท็บ": [[หัวตาราง...], [ค่า...], ...] } */
 function writeSummary(tables) {
+  requireAdmin_();
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
