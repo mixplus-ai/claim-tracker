@@ -1033,6 +1033,7 @@ $("#btnExport").onclick=async()=>{
 
 /* ---------- roles ---------- */
 function setRole(r,who){
+  roleKnown=true;
   role=r==="admin"?"admin":"viewer";canWrite=role==="admin";
   document.body.classList.toggle("ro",!canWrite);
   const b=$("#roleBadge");b.className="role"+(canWrite?" admin":"");
@@ -1199,16 +1200,20 @@ function fromSheet(d){
   d.values.forEach((v,i)=>{if(!v||!v.length)return;const row=d.start+i,o={id:"r"+row,row,seq:row};COLS.forEach((k,j)=>o[k]=v[j]==null?"":String(v[j]));out.push(o)});
   return out;
 }
-let loading=false;
+let loading=false,slowT=0,roleKnown=false;
+window.addEventListener("error",e=>notice("เกิดข้อผิดพลาดในหน้าเว็บ: "+(e.message||"")+" (ตรวจว่าวางโค้ด Index.html ครบทั้งไฟล์)",true));
+run("whoami",authTok).then(r=>{if(!roleKnown){if(authTok&&r.role!=="admin"){authTok="";sess("claim.tok",null)}setRole(r.role,r.admin)}})
+  .catch(e=>{if(!roleKnown)setRole("viewer","");notice("ตรวจสิทธิ์ไม่สำเร็จ: "+((e&&e.message)||"")+" ตรวจว่าวาง Code.gs เวอร์ชันล่าสุดและทำให้ใช้งานได้เป็นเวอร์ชันใหม่แล้ว",true)});
 async function load(force){
   if(loading)return;loading=true;
   try{
     if(!force&&lastRev){const rev=await run("getRev");if(rev===lastRev)return}
+    clearTimeout(slowT);slowT=setTimeout(()=>notice("กำลังโหลดข้อมูลจากชีต ใช้เวลานานกว่าปกติ… ถ้าค้างนานให้กดรีเฟรช หรือเปิดลิงก์ Web app ใหม่"),25000);
     const d=await run("getData",authTok);
     rows=fromSheet(d);lastRev=d.rev;me=d.user||me;loadedAt=new Date();if(authTok&&d.role!=="admin"){authTok="";sess("claim.tok",null)}setRole(d.role,d.admin);
     notice("");renderAll();
-  }catch(e){notice("โหลดข้อมูลจากชีตไม่สำเร็จ: "+((e&&e.message)||"ลองกดรีเฟรช"),true)}
-  finally{loading=false;stampTime()}
+  }catch(e){notice("โหลดข้อมูลจากชีตไม่สำเร็จ: "+((e&&e.message)||"ลองกดรีเฟรช"),true);if(!roleKnown)setRole("viewer","")}
+  finally{loading=false;clearTimeout(slowT);stampTime()}
 }
 function stampTime(){if(loadedAt)$("#listCount").textContent=`${visibleClaims().length} เลขเคลม · ข้อมูล ณ ${loadedAt.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}`}
 $("#btnRefresh").onclick=()=>{toast("กำลังดึงข้อมูลล่าสุดจากชีต…");load(true)};

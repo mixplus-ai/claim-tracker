@@ -99,6 +99,8 @@ function login(id, pw) {
   cache.put('tok_' + token, a.id, Math.min(6, CONFIG.SESSION_HOURS || 6) * 3600);
   return { token: token, id: a.id, role: 'admin' };
 }
+/** ตรวจสิทธิ์อย่างเดียว (เร็ว ไม่อ่านชีต) */
+function whoami(token) { const id = adminOf_(token); return { role: id ? 'admin' : 'viewer', admin: id }; }
 function logout(token) { if (token) CacheService.getScriptCache().remove('tok_' + token); return true; }
 /** ผู้ใช้คนนี้เป็น Admin ไหม: คืนชื่อ Admin หรือ '' */
 function adminOf_(token) {
