@@ -246,7 +246,7 @@ body.ro .w{display:none!important}
 </head><body class="ro">
 
 <header class="bar">
-  <div class="brand"><h1>CLAIM TRACKER</h1><span>SSC · SolarEdge · v2026.10.07-4</span><span class="role" id="roleBadge">ผู้ดู · อ่านอย่างเดียว</span><button class="btn sm" type="button" id="btnLogin">เข้าสู่ระบบ Admin</button></div>
+  <div class="brand"><h1>CLAIM TRACKER</h1><span>SSC · SolarEdge · v2026.10.07-5</span><span class="role" id="roleBadge">ผู้ดู · อ่านอย่างเดียว</span><button class="btn sm" type="button" id="btnLogin">เข้าสู่ระบบ Admin</button></div>
   <div class="search">
     <select id="scope" aria-label="ค้นหาจาก">
       <option value="all">ทุกช่อง</option>
@@ -370,9 +370,9 @@ const STAGES=[
   f:[["issDoc","เลขที่เบิก MAC5","K"],["issDate","วันที่เบิก","L","date"],["issSn","SN เบิก","M"]]},
  {k:3,t:"ส่วนของการคืนสินค้างานเคลม",dir:"ลูกค้า >> SSC",sub:"รายการคืนของเสีย ของดีเคลมให้ SIAM",c:"--s3",sn:"retSn",
   f:[["retPcode","รหัสสินค้า","N"],["retDoc","เลขที่เบิก","O"],["retDate","วันที่","P","date"],["retSn","SN คืน","Q"],["retNote","หมายเหตุ","R"]]},
- {k:4,t:"ส่วนการรับของเคลมกับ SolarEdge",dir:"SolarEdge << SSC",sub:"รายการรับจาก AWOT",c:"--s4",sn:"rcvSn",
+ {k:4,t:"ส่วนการรับของเคลมกับ SolarEdge",dir:"SolarEdge >> SSC",sub:"รายการรับจาก AWOT",c:"--s4",sn:"rcvSn",
   f:[["rcvPcode","รหัสสินค้า","S"],["rcvDoc","เลขที่เบิก","T"],["rcvDate","วันที่","U","date"],["rcvSn","SN รับ","V"]]},
- {k:5,t:"รายการส่วนที่ตรวจสอบเเล้วไม่เสีย",dir:"SolarEdge << SSC",sub:"รายการคืนของเสียให้ AWOT",c:"--s5",sn:"okSn",optional:true,
+ {k:5,t:"รายการของเสียส่งคืน SolarEdge",dir:"SSC >> SolarEdge",sub:"รายการคืนของเสียให้ AWOT",c:"--s5",sn:"okSn",optional:true,
   f:[["okPcode","รหัสสินค้า","W"],["okDoc","เลขที่เบิก","X"],["okDate","วันที่","Y","date"],["okSn","SN จ่าย","Z"]]}
 ];
 const COLS=STAGES.flatMap(s=>s.f.map(x=>x[0]));          // A..Z order, 26 fields
@@ -1083,7 +1083,7 @@ function prRow(r,i){
   ${tdv(r.okDoc,"m")}${tdv(r.okDate)}<td class="m">${esc(norm(r.okSn))}${pcSub(r,"okPcode")}</td></tr>`;
 }
 const PR_COLS=`<colgroup><col style="width:2.4%"><col style="width:9.6%">${["7%","5.4%","9.6%"].map(w=>`<col style="width:${w}">`).join("")}${["7%","5.4%","9.6%","5.6%"].map(w=>`<col style="width:${w}">`).join("")}${["6.6%","5.2%","8.3%"].map(w=>`<col style="width:${w}">`).join("")}${["6.6%","5.2%","8.3%"].map(w=>`<col style="width:${w}">`).join("")}</colgroup>`;
-const PR_HEAD=`<thead><tr class="g"><th colspan="2" style="--pc:${PCOL[1]}">1. ลูกค้า &gt;&gt; SSC</th><th colspan="3" style="--pc:${PCOL[2]}">2. เบิก SSC &gt;&gt; ลูกค้า</th><th colspan="4" style="--pc:${PCOL[3]}">3. คืนสินค้า ลูกค้า &gt;&gt; SSC</th><th colspan="3" style="--pc:${PCOL[4]}">4. รับของเคลม SolarEdge</th><th colspan="3" style="--pc:${PCOL[5]}">5. ตรวจแล้วไม่เสีย</th></tr>
+const PR_HEAD=`<thead><tr class="g"><th colspan="2" style="--pc:${PCOL[1]}">1. ลูกค้า &gt;&gt; SSC</th><th colspan="3" style="--pc:${PCOL[2]}">2. เบิก SSC &gt;&gt; ลูกค้า</th><th colspan="4" style="--pc:${PCOL[3]}">3. คืนสินค้า ลูกค้า &gt;&gt; SSC</th><th colspan="3" style="--pc:${PCOL[4]}">4. รับของเคลม SolarEdge &gt;&gt; SSC</th><th colspan="3" style="--pc:${PCOL[5]}">5. ของเสียส่งคืน SSC &gt;&gt; SolarEdge</th></tr>
   <tr><th>#</th><th>รหัสสินค้า</th><th>เลขที่เบิก MAC5</th><th>วันที่เบิก</th><th>SN เบิก</th><th>เลขที่เบิก</th><th>วันที่</th><th>SN คืน</th><th>หมายเหตุ</th><th>เลขที่เบิก</th><th>วันที่</th><th>SN รับ</th><th>เลขที่เบิก</th><th>วันที่</th><th>SN จ่าย</th></tr></thead>`;
 function prPage(d,first,printed){
   const c=d.c,el=document.createElement("div");el.className="pp";
@@ -1177,7 +1177,7 @@ async function claimXlsx(c){
     [[1,4],[5,6],[7,12],[13,15]].forEach(([a,b],j)=>{ws.mergeCells(r,a,r,b);const cl=ws.getCell(r,a);Object.assign(cl,{value:vals[j],font:{name:F,size:9,bold:j===0,color:j===0?{argb:hex(PCOL[s.k])}:undefined},border:box,alignment:{wrapText:true,vertical:"top"}})});
     r++}
   r++;
-  const g=[[1,2,1],[3,5,2],[6,9,3],[10,12,4],[13,15,5]],gt=["1. ลูกค้า >> SSC","2. เบิก SSC >> ลูกค้า","3. คืนสินค้า ลูกค้า >> SSC","4. รับของเคลม SolarEdge","5. ตรวจแล้วไม่เสีย"];
+  const g=[[1,2,1],[3,5,2],[6,9,3],[10,12,4],[13,15,5]],gt=["1. ลูกค้า >> SSC","2. เบิก SSC >> ลูกค้า","3. คืนสินค้า ลูกค้า >> SSC","4. รับของเคลม SolarEdge >> SSC","5. ของเสียส่งคืน SSC >> SolarEdge"];
   const hr1=r;g.forEach(([a,b,k],i)=>{if(b>a)ws.mergeCells(r,a,r,b);Object.assign(ws.getCell(r,a),{value:gt[i],font:{name:F,size:9,bold:true,color:{argb:"FFFFFFFF"}},fill:fill(PCOL[k]),alignment:{horizontal:"center"},border:box})});
   r++;
   ["#","รหัสสินค้า","เลขที่เบิก MAC5","วันที่เบิก","SN เบิก","เลขที่เบิก","วันที่","SN คืน","หมายเหตุ","เลขที่เบิก","วันที่","SN รับ","เลขที่เบิก","วันที่","SN จ่าย"].forEach((t,j)=>Object.assign(ws.getCell(r,j+1),{value:t,font:{name:F,size:9,bold:true},fill:fill("#eef1f0"),border:box,alignment:{wrapText:true,vertical:"middle"}}));
