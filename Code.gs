@@ -181,3 +181,28 @@ function addRows(list) { return saveBatch({ inserts: { rows: list } }); }
 
 /** ลบแถว: items = [{row, expect:{claimNo, issSn}}] */
 function deleteRows(items) { return saveBatch({ deletes: items }); }
+
+/** เขียนตารางสรุปจากแดชบอร์ดลงแท็บ (ใช้ต่อกับ Looker Studio / ระบบรายงาน)
+ *  tables = { "ชื่อแท็บ": [[หัวตาราง...], [ค่า...], ...] } */
+function writeSummary(tables) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ss = ss_();
+    let n = 0;
+    Object.keys(tables || {}).forEach(function (name) {
+      if (!/^สรุป_/.test(name)) return; // เขียนเฉพาะแท็บสรุปเท่านั้น
+      const rows = tables[name] || [];
+      if (!rows.length) return;
+      const w = rows.reduce(function (m, r) { return Math.max(m, r.length); }, 1);
+      const data = rows.map(function (r) { const a = r.slice(); while (a.length < w) a.push(''); return a; });
+      const sh = ss.getSheetByName(name) || ss.insertSheet(name);
+      sh.clearContents();
+      sh.getRange(1, 1, data.length, w).setValues(data);
+      sh.setFrozenRows(1);
+      sh.getRange(1, 1, 1, w).setFontWeight('bold');
+      n++;
+    });
+    return { tabs: n };
+  } finally { lock.releaseLock(); }
+}

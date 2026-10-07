@@ -148,6 +148,43 @@ label.f input.err{border-color:var(--bad)}
 .dbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .dbar input,.dbar select{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);min-width:0}
 a.cl{color:var(--accent);font-family:var(--f-mono);cursor:pointer;text-decoration:underline}
+/* dashboard — chart series follow the validated reference palette */
+:root{--c1:#2a78d6;--c2:#eb6834;--c3:#1baf7a;--c4:#eda100;--grid:#e3e7e5;--seq:#2a78d6;--seq-soft:#cde2fb}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--c1:#3987e5;--c2:#d95926;--c3:#199e70;--c4:#c98500;--grid:#2c3633;--seq:#3987e5;--seq-soft:#1c3150}}
+:root[data-theme="dark"]{--c1:#3987e5;--c2:#d95926;--c3:#199e70;--c4:#c98500;--grid:#2c3633;--seq:#3987e5;--seq-soft:#1c3150}
+#dlgDash{width:100vw;max-width:100vw;height:100%;max-height:100%;margin:0;border-radius:0;border:0;padding:0}
+#dlgDash .dlg{max-height:100%;height:100%}
+.dash{display:grid;gap:16px;padding-block:16px;padding-inline:16px;overflow:auto;background:var(--bg)}
+.dash h4{margin:0;font-family:var(--f-display);font-size:16px;letter-spacing:.02em}
+.dash .sub2{color:var(--muted);font-size:12.5px}
+.dhd{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:flex-end}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;min-width:0}
+.kpi small{display:block;color:var(--muted);font-size:12px}
+.kpi b{display:block;font-family:var(--f-display);font-size:28px;line-height:1.15;font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted)}
+.kpi.good b{color:var(--ok)} .kpi.warn b{color:var(--warn)} .kpi.bad b{color:var(--bad)}
+.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:grid;gap:10px;min-width:0;align-content:start}
+.panel .ph{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+.hb{display:grid;grid-template-columns:minmax(90px,40%) 1fr;gap:6px 10px;align-items:center;font-size:12.5px}
+.hb .lb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb .tr{position:relative;height:18px;display:flex;align-items:center;gap:6px}
+.hb .bar{height:14px;border-radius:0 4px 4px 0;background:var(--sb,var(--seq));min-width:2px}
+.hb .v{font-variant-numeric:tabular-nums;color:var(--fg);white-space:nowrap}
+.hb [data-tip]{cursor:default}
+.lc svg{display:block;width:100%;height:auto}
+.lc text{fill:var(--muted);font-size:11px;font-family:var(--f-body)}
+.lc .gl{stroke:var(--grid);stroke-width:1}
+.lc .ax{stroke:var(--line);stroke-width:1}
+.lc .hair{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3}
+.legend2{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--fg)}
+.legend2 i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.dtab td,.dtab th{text-align:right}.dtab td:first-child,.dtab th:first-child{text-align:left}
+.dtab .mini{display:inline-block;height:8px;border-radius:0 4px 4px 0;background:var(--seq);vertical-align:middle;margin-right:6px}
+#dTip{position:fixed;z-index:30;pointer-events:none;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.12);max-width:260px}
+#dTip b{font-variant-numeric:tabular-nums}
+#dTip .sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head><body>
@@ -167,7 +204,8 @@ a.cl{color:var(--accent);font-family:var(--f-mono);cursor:pointer;text-decoratio
     <input id="q" type="search" placeholder="พิมพ์เลขเคลม เช่น 23-0312, รหัสสินค้า, SN, Case ID…" autocomplete="off">
   </div>
   <div class="actions">
-    <button class="btn primary" id="btnDocs" type="button">กรอกเลขที่ใบเบิกทุกเคลม</button>
+    <button class="btn primary" id="btnDash" type="button">แดชบอร์ด</button>
+    <button class="btn" id="btnDocs" type="button">กรอกเลขที่ใบเบิกทุกเคลม</button>
     <button class="btn" id="btnAll" type="button">กรอกรวมตามเลขเคลม</button>
     <button class="btn" id="btnNew" type="button">+ เปิดใบเคลมใหม่</button>
     <button class="btn" id="btnAudit" type="button">รายงานตรวจสอบ</button>
@@ -197,6 +235,16 @@ a.cl{color:var(--accent);font-family:var(--f-mono);cursor:pointer;text-decoratio
     <button class="btn primary" type="submit" id="rowSave">บันทึก</button>
   </footer>
 </form></dialog>
+
+<dialog id="dlgDash"><div class="dlg">
+  <header><h3>แดชบอร์ดสรุปผลการดำเนินงานงานเคลม</h3><div class="actions">
+    <select id="dashYear" aria-label="ปี" style="padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg)"></select>
+    <button class="btn sm" type="button" id="dashCsv">ส่งออก CSV</button>
+    <button class="btn sm" type="button" id="dashSheet">เขียนตารางสรุปลงชีต</button>
+    <button class="btn sm" type="button" data-close>ปิด</button></div></header>
+  <div class="dash" id="dashBody"></div>
+</div></dialog>
+<div id="dTip" hidden></div>
 
 <dialog id="dlgDocs" style="width:calc(100vw - 32px);max-width:1600px"><div class="dlg">
   <header><h3>กรอกเลขที่ใบเบิกทุกเคลม</h3><button class="btn sm" type="button" data-close>ปิด</button></header>
@@ -488,7 +536,7 @@ async function resolveAudit(){
   try{const ps=await user.profiles([sp.dataset.uid]);const nm=ps&&ps[sp.dataset.uid]&&ps[sp.dataset.uid].name;if(nm)sp.textContent=" โดย "+nm}catch(e){}
 }
 function pick(o,keys){const r={};for(const k of keys)r[k]=o[k]==null?"":o[k];return r}
-function renderAll(){rebuild();auditCache=null;if(selected&&!claims.has(selected))selected=null;renderSummary();renderList();renderDetail()}
+function renderAll(){rebuild();auditCache=null;dashCache=null;if($("#dlgDash")&&$("#dlgDash").open)renderDash();if(selected&&!claims.has(selected))selected=null;renderSummary();renderList();renderDetail()}
 
 /* ---------- edit dialog ---------- */
 function fieldHTML([k,l,col,type],v,ro){
@@ -660,6 +708,149 @@ $("#stSave").onclick=async()=>{
   }catch(err){$("#stErr").textContent=writeErr(err)}
   finally{$("#stSave").disabled=false;$("#stSave").textContent="บันทึกลงชีต"}
 };
+/* ---------- dashboard ---------- */
+const TH_M=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+const NF=new Intl.NumberFormat("th-TH");
+function pdate(v){const m=norm(v).match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);if(!m)return null;let y=+m[3];if(y>2400)y-=543;const d=new Date(y,+m[2]-1,+m[1]);return isNaN(d)||y<2015||y>2100?null:d}
+const DAY=864e5,ymKey=d=>d.getFullYear()*100+d.getMonth()+1,ymLabel=k=>`${TH_M[k%100-1]} ${String(Math.floor(k/100)+543).slice(2)}`;
+function median(a){a=a.filter(x=>x!=null).sort((x,y)=>x-y);if(!a.length)return null;const m=a.length>>1;return a.length%2?a[m]:(a[m-1]+a[m])/2}
+function gap(a,b){if(!a||!b)return null;const d=Math.round((b-a)/DAY);return d<0||d>1500?null:d}
+let dashCache=null;
+function dashBase(){
+  if(dashCache)return dashCache;
+  const cl=[],act=[];
+  for(const c of claims.values()){
+    if(c.no==="(ไม่มีเลขเคลม)")continue;
+    const first=k=>c.rows.map(r=>pdate(r[k])).filter(Boolean).sort((a,b)=>a-b);
+    const st=first("vdate")[0]||first("issDate")[0]||null,iss=first("issDate"),ret=first("retDate"),rcv=first("rcvDate");
+    cl.push({no:c.no,company:norm(c.head.company)||"(ไม่ระบุบริษัท)",pcode:norm(c.head.pcode),start:st,year:st?st.getFullYear():null,units:c.rows.length,done:c.done,problem:c.problem,
+      dIss:gap(st,iss[0]),dRet:gap(st,ret[0]),dCycle:c.done?gap(st,rcv[rcv.length-1]):null,
+      issU:c.rows.filter(r=>norm(r.issSn)).length,retU:c.rows.filter(r=>norm(r.retSn)).length,rcvU:c.rows.filter(r=>norm(r.rcvSn)).length});
+    for(const r of c.rows){[["vdate",0],["issDate",1],["retDate",2],["rcvDate",3]].forEach(([k,i])=>{const d=pdate(r[k]);if(d)act.push([ymKey(d),i,d.getFullYear()])});
+      if(!pdate(r.vdate)&&st)act.push([ymKey(st),0,st.getFullYear()])}
+  }
+  return dashCache={cl,act};
+}
+function dashCompute(year){
+  const {cl,act}=dashBase(),Y=year==="all"?null:+year;
+  const sel=cl.filter(x=>Y===null||x.year===Y);
+  const k={claims:sel.length,units:sel.reduce((n,x)=>n+x.units,0),done:sel.filter(x=>x.done).length,problem:sel.filter(x=>x.problem).length,
+    dIss:median(sel.map(x=>x.dIss)),dRet:median(sel.map(x=>x.dRet)),dCycle:median(sel.map(x=>x.dCycle)),noDate:sel.filter(x=>!x.start).length};
+  const years=[...new Set(cl.map(x=>x.year).filter(Boolean))].sort();
+  const yearly=years.map(y=>{const a=cl.filter(x=>x.year===y);return {y,claims:a.length,units:a.reduce((n,x)=>n+x.units,0),done:a.filter(x=>x.done).length,open:a.filter(x=>!x.done).length,dIss:median(a.map(x=>x.dIss)),dCycle:median(a.map(x=>x.dCycle))}});
+  let months;
+  const nowM=new Date().getFullYear()*100+new Date().getMonth()+1;
+  if(Y!==null){months=Array.from({length:12},(_,i)=>Y*100+i+1);const f=months.filter(m=>m<=nowM);if(f.length)months=f}
+  else{const ks=act.map(a=>a[0]);if(ks.length){let lo=Math.min(...ks),hi=Math.max(lo,Math.min(nowM,Math.max(...ks)));months=[];for(let m=lo;m<=hi;m=(m%100===12?m+89:m+1))months.push(m)}else months=[]}
+  const idx=new Map(months.map((m,i)=>[m,i])),ser=[0,1,2,3].map(()=>months.map(()=>0)),newClaims=months.map(()=>0);
+  for(const [m,i] of act){if(idx.has(m))ser[i][idx.get(m)]++}
+  for(const x of cl){if(x.start&&idx.has(ymKey(x.start)))newClaims[idx.get(ymKey(x.start))]++}
+  const byCo=new Map();for(const x of sel){const o=byCo.get(x.company)||{name:x.company,claims:0,units:0,done:0,d:[]};o.claims++;o.units+=x.units;if(x.done)o.done++;o.d.push(x.dIss);byCo.set(x.company,o)}
+  const companies=[...byCo.values()].map(o=>({...o,open:o.claims-o.done,dIss:median(o.d)})).sort((a,b)=>b.claims-a.claims||b.units-a.units);
+  const byP=new Map();for(const x of sel){const c=claims.get(x.no);for(const r of c.rows){const p=norm(r.pcode)||"(ไม่ระบุ)";byP.set(p,(byP.get(p)||0)+1)}}
+  const products=[...byP].map(([name,units])=>({name,units})).sort((a,b)=>b.units-a.units);
+  const pipe=[["รับเคลม (หน่วย)",k.units],["เบิกให้ลูกค้าแล้ว",sel.reduce((n,x)=>n+x.issU,0)],["คืน SolarEdge แล้ว",sel.reduce((n,x)=>n+x.retU,0)],["รับของจาก AWOT แล้ว",sel.reduce((n,x)=>n+x.rcvU,0)]];
+  return {Y,k,yearly,months,ser,newClaims,companies,products,pipe};
+}
+const fmtD=v=>v==null?"–":`${NF.format(Math.round(v))} วัน`;
+const pct=(a,b)=>b?`${Math.round(a/b*100)}%`:"–";
+function hbars(list,max,color){return `<div class="hb">${list.map(x=>`<div class="lb" title="${esc(x.label)}">${esc(x.label)}</div><div class="tr" data-tip="${esc(x.tip||"")}"><div class="bar" style="width:${max?Math.max(.5,x.value/max*100*0.82):0}%;--sb:${color||"var(--seq)"}"></div><span class="v">${NF.format(x.value)}</span></div>`).join("")}</div>`}
+function lineSVG(months,series,W){
+  const H=260,L=40,R=86,T=14,B=30,w=Math.max(200,W-L-R),h=H-T-B,n=months.length;
+  const mx=Math.max(1,...series.flatMap(s=>s.vals));const step=Math.pow(10,Math.floor(Math.log10(mx)));const top=Math.ceil(mx/step/ (mx/step>5?1:0.5))*(mx/step>5?step:step/2);
+  const x=i=>L+(n<2?w/2:i*w/(n-1)),y=v=>T+h-v/top*h;
+  const ticks=[0,.25,.5,.75,1].map(f=>Math.round(top*f));
+  const every=Math.max(1,Math.ceil(n/(w/56)));
+  let g=ticks.map(t=>`<line class="gl" x1="${L}" x2="${L+w}" y1="${y(t)}" y2="${y(t)}"/><text x="${L-6}" y="${y(t)+4}" text-anchor="end">${NF.format(t)}</text>`).join("");
+  g+=`<line class="ax" x1="${L}" x2="${L+w}" y1="${T+h}" y2="${T+h}"/>`;
+  g+=months.map((m,i)=>i%every===0?`<text x="${x(i)}" y="${H-10}" text-anchor="middle">${ymLabel(m)}</text>`:"").join("");
+  g+=series.map(s=>`<polyline fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${s.vals.map((v,i)=>`${x(i)},${y(v)}`).join(" ")}"/>`).join("");
+  // direct labels at line ends, nudged apart
+  const ends=series.map(s=>({s,yy:y(s.vals[n-1]||0)})).sort((a,b)=>a.yy-b.yy);for(let i=1;i<ends.length;i++)if(ends[i].yy-ends[i-1].yy<13)ends[i].yy=ends[i-1].yy+13;for(let i=ends.length-1;i>=0;i--){const lim=i===ends.length-1?T+h-2:ends[i+1].yy-13;if(ends[i].yy>lim)ends[i].yy=lim}
+  g+=ends.map(e=>`<circle cx="${x(n-1)}" cy="${y(e.s.vals[n-1]||0)}" r="4" fill="${e.s.color}" stroke="var(--surface)" stroke-width="2"/><text x="${x(n-1)+8}" y="${e.yy+4}" style="fill:var(--fg)">${esc(e.s.short)} ${NF.format(e.s.vals[n-1]||0)}</text>`).join("");
+  g+=`<line class="hair" id="lcHair" x1="0" x2="0" y1="${T}" y2="${T+h}" visibility="hidden"/>`;
+  g+=months.map((m,i)=>{const tip=`${ymLabel(m)}|`+series.map(s=>`${s.name}::${s.vals[i]}::${s.color}`).join("|");const x0=n<2?L:x(i)-w/(n-1)/2;return `<rect x="${Math.max(L,x0)}" y="${T}" width="${n<2?w:w/(n-1)}" height="${h}" fill="transparent" data-ltip="${esc(tip)}" data-x="${x(i)}"/>`}).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="กราฟจำนวนหน่วยต่อเดือนแยกตามขั้นตอน">${g}</svg>`;
+}
+const SER=[{name:"รับเคลมเข้า (หน่วย)",short:"รับเคลม",color:"var(--c1)"},{name:"เบิกให้ลูกค้า",short:"เบิก",color:"var(--c2)"},{name:"คืน SolarEdge",short:"คืน",color:"var(--c3)"},{name:"รับจาก AWOT",short:"รับ",color:"var(--c4)"}];
+let dashLast=null;
+function renderDash(){
+  const year=$("#dashYear").value,d=dashLast=dashCompute(year),k=d.k,body=$("#dashBody");
+  const scope=d.Y?`ปี ${d.Y+543} (${d.Y})`:"ทุกปี";
+  const topCo=d.companies.slice(0,12),topP=d.products.slice(0,10);
+  body.innerHTML=`
+  <div class="dhd"><div><h4>ภาพรวม · ${esc(scope)}</h4><div class="sub2">ข้อมูลจาก Google Sheet ณ ${loadedAt?loadedAt.toLocaleString("th-TH"):"-"} · นับปีจากวันที่ใบสำคัญ (คอลัมน์ C)${k.noDate?` · ${NF.format(k.noDate)} เคลมไม่มีวันที่ จึงไม่นับในรายปี`:""}</div></div></div>
+  <div class="kpis">
+    <div class="kpi"><small>เคลมทั้งหมด</small><b>${NF.format(k.claims)}</b><span>${NF.format(k.units)} หน่วยสินค้า</span></div>
+    <div class="kpi good"><small>ปิดครบ 4 ขั้นตอน</small><b>${pct(k.done,k.claims)}</b><span>${NF.format(k.done)} เคลม</span></div>
+    <div class="kpi warn"><small>กำลังดำเนินการ</small><b>${NF.format(k.claims-k.done)}</b><span>${pct(k.claims-k.done,k.claims)} ของเคลมทั้งหมด</span></div>
+    <div class="kpi bad"><small>ต้องตรวจสอบข้อมูล</small><b>${NF.format(k.problem)}</b><span>SN ซ้ำ / เกินจำนวน / ไม่ตรง</span></div>
+    <div class="kpi"><small>รับเคลม → เบิกให้ลูกค้า</small><b>${fmtD(k.dIss)}</b><span>ค่ามัธยฐาน</span></div>
+    <div class="kpi"><small>รับเคลม → คืน SolarEdge</small><b>${fmtD(k.dRet)}</b><span>ค่ามัธยฐาน</span></div>
+    <div class="kpi"><small>รอบเคลมจนปิดงาน</small><b>${fmtD(k.dCycle)}</b><span>ค่ามัธยฐาน เฉพาะเคลมที่ปิดแล้ว</span></div>
+  </div>
+  <div class="panel"><div class="ph"><h4>รายงานรายเดือน · จำนวนหน่วยสินค้าในแต่ละขั้นตอน</h4><span class="sub2">นับตามวันที่ของแต่ละขั้นตอน</span></div>
+    <div class="legend2">${SER.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>
+    <div class="lc" id="dashLine"></div>
+    <details><summary class="sub2" style="cursor:pointer">ดูเป็นตาราง</summary><div class="tablewrap" style="margin-top:8px;max-height:320px"><table class="dtab"><thead><tr><th>เดือน</th><th>เคลมใหม่</th>${SER.map(s=>`<th>${esc(s.name)}</th>`).join("")}</tr></thead><tbody>
+      ${d.months.map((m,i)=>`<tr><td>${ymLabel(m)}</td><td>${NF.format(d.newClaims[i])}</td>${d.ser.map(v=>`<td>${NF.format(v[i])}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details>
+  </div>
+  <div class="panels">
+    <div class="panel"><div class="ph"><h4>รายงานรายปี</h4><span class="sub2">ทุกปี</span></div>
+      <div class="tablewrap"><table class="dtab"><thead><tr><th>ปี</th><th>เคลม</th><th>หน่วย</th><th>ปิดครบ</th><th>ยังเปิด</th><th>รับ→เบิก</th><th>รอบเคลม</th></tr></thead><tbody>
+      ${(()=>{const mx=Math.max(1,...d.yearly.map(r=>r.claims));return d.yearly.map(r=>`<tr${d.Y===r.y?' style="background:var(--accent-soft)"':""}><td>${r.y+543} <span class="sub2">(${r.y})</span></td><td><span class="mini" style="width:${Math.round(r.claims/mx*60)}px"></span>${NF.format(r.claims)}</td><td>${NF.format(r.units)}</td><td>${pct(r.done,r.claims)}</td><td>${NF.format(r.open)}</td><td>${fmtD(r.dIss)}</td><td>${fmtD(r.dCycle)}</td></tr>`).join("")})()}
+      </tbody></table></div></div>
+    <div class="panel"><div class="ph"><h4>สถานะหน่วยสินค้าตามขั้นตอน</h4><span class="sub2">${esc(scope)}</span></div>
+      ${hbars(d.pipe.map(([l,v])=>({label:l,value:v,tip:`${l}: ${NF.format(v)} หน่วย (${pct(v,d.pipe[0][1])})`})),d.pipe[0][1])}
+      <div class="sub2">ส่วนต่างระหว่างแถบคือหน่วยที่ยังค้างอยู่ในขั้นตอนก่อนหน้า</div></div>
+  </div>
+  <div class="panels">
+    <div class="panel"><div class="ph"><h4>สถิติการเคลมรายบริษัท · 12 อันดับแรก</h4><span class="sub2">จำนวนเคลม · ${NF.format(d.companies.length)} บริษัท</span></div>
+      ${hbars(topCo.map(o=>({label:o.name,value:o.claims,tip:`${o.name}: ${NF.format(o.claims)} เคลม · ${NF.format(o.units)} หน่วย · ปิดครบ ${pct(o.done,o.claims)}`})),topCo[0]?topCo[0].claims:0,"var(--c1)")}</div>
+    <div class="panel"><div class="ph"><h4>สินค้าที่เคลมมากที่สุด · 10 อันดับแรก</h4><span class="sub2">จำนวนหน่วย</span></div>
+      ${hbars(topP.map(o=>({label:o.name,value:o.units,tip:`${o.name}: ${NF.format(o.units)} หน่วย`})),topP[0]?topP[0].units:0,"var(--c2)")}</div>
+  </div>
+  <div class="panel"><div class="ph"><h4>ตารางสถิติรายบริษัท</h4><input id="dashCoQ" type="search" placeholder="ค้นหาบริษัท" style="padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg)"></div>
+    <div class="tablewrap" style="max-height:420px"><table class="dtab"><thead><tr><th>บริษัท</th><th>เคลม</th><th>หน่วย</th><th>ปิดครบ</th><th>ยังเปิด</th><th>รับ→เบิก (มัธยฐาน)</th></tr></thead><tbody id="dashCoBody"></tbody></table></div></div>`;
+  const coRows=q=>d.companies.filter(o=>!q||low(o.name).includes(q)).slice(0,300).map(o=>`<tr><td style="text-align:left;white-space:normal">${esc(o.name)}</td><td>${NF.format(o.claims)}</td><td>${NF.format(o.units)}</td><td>${pct(o.done,o.claims)}</td><td>${NF.format(o.open)}</td><td>${fmtD(o.dIss)}</td></tr>`).join("");
+  $("#dashCoBody").innerHTML=coRows("");$("#dashCoQ").oninput=e=>{$("#dashCoBody").innerHTML=coRows(low(e.target.value))};
+  drawLine();
+}
+function drawLine(){
+  const el=$("#dashLine");if(!el||!dashLast)return;const d=dashLast;
+  el.innerHTML=d.months.length?lineSVG(d.months,SER.map((s,i)=>({...s,vals:d.ser[i]})),Math.max(320,el.clientWidth||900)):`<div class="empty">ไม่มีข้อมูลวันที่</div>`;
+  const hair=el.querySelector("#lcHair");
+  el.querySelectorAll("[data-ltip]").forEach(r=>{r.onpointermove=e=>{const [m,...ss]=r.dataset.ltip.split("|");hair.setAttribute("x1",r.dataset.x);hair.setAttribute("x2",r.dataset.x);hair.setAttribute("visibility","visible");
+    showTip(e,[["",m]].concat(ss.map(x=>x.split("::"))))};r.onpointerleave=()=>{hair.setAttribute("visibility","hidden");hideTip()}});
+}
+function showTip(e,lines){const t=$("#dTip");t.textContent="";lines.forEach(([name,val,color],i)=>{const row=document.createElement("div");if(i===0&&!name){const b=document.createElement("b");b.textContent=val;row.appendChild(b)}else{if(color){const sw=document.createElement("span");sw.className="sw";sw.style.background=color;row.appendChild(sw)}const b=document.createElement("b");b.textContent=NF.format(+val)+" ";row.appendChild(b);row.appendChild(document.createTextNode(name))}t.appendChild(row)});
+  t.hidden=false;const x=Math.min(e.clientX+14,innerWidth-t.offsetWidth-8),y=Math.min(e.clientY+14,innerHeight-t.offsetHeight-8);t.style.left=x+"px";t.style.top=y+"px"}
+function hideTip(){$("#dTip").hidden=true}
+document.addEventListener("pointermove",e=>{const el=e.target.closest&&e.target.closest("#dashBody [data-tip]");if(el&&el.dataset.tip){const t=$("#dTip");t.textContent=el.dataset.tip;t.hidden=false;t.style.left=Math.min(e.clientX+14,innerWidth-t.offsetWidth-8)+"px";t.style.top=Math.min(e.clientY+14,innerHeight-t.offsetHeight-8)+"px"}else if(!(e.target.closest&&e.target.closest("[data-ltip]")))hideTip()});
+addEventListener("resize",()=>{if($("#dlgDash").open)drawLine()});
+$("#btnDash").onclick=()=>{dashCache=null;const ys=[...new Set(dashBase().cl.map(x=>x.year).filter(Boolean))].sort();const cur=$("#dashYear").value;
+  $("#dashYear").innerHTML=`<option value="all">ทุกปี</option>`+ys.map(y=>`<option value="${y}">ปี ${y+543} (${y})</option>`).join("");
+  $("#dashYear").value=ys.includes(+cur)?cur:(ys.length?String(ys[ys.length-1]):"all");$("#dlgDash").showModal();renderDash()};
+$("#dashYear").onchange=renderDash;
+function dashTables(){
+  const d=dashLast,all=dashCompute("all");
+  return {
+    "สรุป_รายปี":[["ปี (ค.ศ.)","เคลม","หน่วย","ปิดครบ","ยังเปิด","รับ→เบิก (วัน มัธยฐาน)","รอบเคลม (วัน มัธยฐาน)"],...all.yearly.map(r=>[r.y,r.claims,r.units,r.done,r.open,r.dIss??"",r.dCycle??""])],
+    "สรุป_รายเดือน":[["เดือน (YYYY-MM)","เคลมใหม่",...SER.map(s=>s.name)],...all.months.map((m,i)=>[`${Math.floor(m/100)}-${String(m%100).padStart(2,"0")}`,all.newClaims[i],...all.ser.map(v=>v[i])])],
+    "สรุป_บริษัท":[["บริษัท","เคลม","หน่วย","ปิดครบ","ยังเปิด","รับ→เบิก (วัน มัธยฐาน)"],...all.companies.map(o=>[o.name,o.claims,o.units,o.done,o.open,o.dIss??""])],
+    "สรุป_สินค้า":[["รหัสสินค้า","หน่วย"],...all.products.map(o=>[o.name,o.units])]
+  };
+}
+$("#dashCsv").onclick=async()=>{const t=dashTables();const csv="﻿"+Object.entries(t).map(([n,rows])=>[[n],...rows].map(r=>r.map(csvCell).join(",")).join("\r\n")).join("\r\n\r\n");
+  try{await downloads.save({filename:`claim-dashboard-${new Date().toISOString().slice(0,10)}.csv`,data:csv})}catch(e){toast("ส่งออกไม่สำเร็จ")}};
+let sheetArmed=false;
+$("#dashSheet").onclick=async()=>{
+  if(!sheetArmed){sheetArmed=true;$("#dashSheet").textContent="ยืนยัน: เขียนทับแท็บ สรุป_*";setTimeout(()=>{sheetArmed=false;$("#dashSheet").textContent="เขียนตารางสรุปลงชีต"},5000);return}
+  sheetArmed=false;$("#dashSheet").disabled=true;$("#dashSheet").textContent="กำลังเขียน…";
+  try{const r=await run("writeSummary",dashTables());toast(`เขียน ${r.tabs} แท็บสรุปลงชีตแล้ว ใช้กับ Looker Studio ได้`)}catch(e){toast("เขียนไม่สำเร็จ: "+(e&&e.message||""))}
+  finally{$("#dashSheet").disabled=false;$("#dashSheet").textContent="เขียนตารางสรุปลงชีต"}
+};
+
 /* ---------- document numbers for every claim on one page ---------- */
 const DSTAGE=[1,2,3,4,5].map(k=>({k,doc:DOC_KEYS[k],date:STAGES[k-1].f.find(x=>x[3]==="date")[0]}));
 let docs={edits:new Map(),sel:new Set(),page:0,armed:false};
