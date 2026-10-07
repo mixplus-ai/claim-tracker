@@ -94,10 +94,12 @@ function log_(rows) {
   lg.getRange(lg.getLastRow() + 1, 1, rows.length, 7).setValues(rows);
 }
 
+function colA1_(n) { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+
 /** ตรวจว่าแถวในชีตยังเป็นข้อมูลเดิม (กันเขียน/ลบผิดแถวเมื่อมีคนแทรกหรือลบแถวระหว่างนั้น) */
-function check_(sh, row, expect) {
+function check_(sh, row, expect, cache) {
   if (!(row >= CONFIG.DATA_START_ROW) || row > sh.getLastRow()) throw new Error('แถว ' + row + ' ไม่มีในชีตแล้ว กรุณากดรีเฟรช');
-  const r = sh.getRange(row, 1, 1, NCOL).getDisplayValues()[0];
+  const r = cache ? cache[row - CONFIG.DATA_START_ROW] : sh.getRange(row, 1, 1, NCOL).getDisplayValues()[0];
   Object.keys(expect || {}).forEach(function (k) {
     const j = COLS.indexOf(k);
     if (j >= 0 && String(r[j]).trim() !== String(expect[k] == null ? '' : expect[k]).trim())
@@ -125,21 +127,31 @@ function saveBatch(b) {
   try {
     const sh = sheet_(), who = Session.getActiveUser().getEmail() || '', now = new Date(), logs = [];
     // 1) ตรวจทุกแถวก่อน ยังไม่เขียนอะไร
-    const cur = updates.map(function (u) { return check_(sh, u.row, u.expect); });
-    const del = deletes.map(function (d) { return { row: d.row, vals: check_(sh, d.row, d.expect) }; });
+    // อ่านทั้งชีตครั้งเดียวเมื่อแก้หลายแถว (เร็วกว่าอ่านทีละแถว)
+    const many = updates.length + deletes.length > 15;
+    const cache = many ? sh.getRange(CONFIG.DATA_START_ROW, 1, Math.max(1, sh.getLastRow() - CONFIG.DATA_START_ROW + 1), NCOL).getDisplayValues() : null;
+    const cur = updates.map(function (u) { return check_(sh, u.row, u.expect, cache); });
+    const del = deletes.map(function (d) { return { row: d.row, vals: check_(sh, d.row, d.expect, cache) }; });
     let after = null;
     if (insRows.length && ins.afterRow) { check_(sh, ins.afterRow, ins.afterExpect); after = ins.afterRow; }
     if (after !== null && del.some(function (d) { return d.row > after; })) throw new Error('ตำแหน่งเพิ่มแถวไม่ถูกต้อง กรุณากดรีเฟรช');
     // 2) แก้ไขช่อง (ไม่ทำให้เลขแถวเลื่อน)
+    //    รวมช่องที่ได้ค่าเดียวกันแล้วเขียนครั้งเดียว (เช่นเลขที่ใบเบิกเดียวกันหลายแถว)
+    const groups = {};
     updates.forEach(function (u, i) {
       Object.keys(u.patch || {}).forEach(function (k) {
         const j = COLS.indexOf(k);
         if (j < 0) return;
         const nv = String(u.patch[k] == null ? '' : u.patch[k]).trim();
         if (nv === String(cur[i][j]).trim()) return;
-        sh.getRange(u.row, j + 1).setValue(toCell_(k, nv));
+        const g = k + '\u0000' + nv;
+        (groups[g] = groups[g] || { k: k, nv: nv, a1: [] }).a1.push(colA1_(j + 1) + u.row);
         logs.push([now, who, u.row, String(cur[i][5]).trim(), LABELS[j], cur[i][j], nv]);
       });
+    });
+    Object.keys(groups).forEach(function (g) {
+      const x = groups[g], v = toCell_(x.k, x.nv);
+      for (let i = 0; i < x.a1.length; i += 500) sh.getRangeList(x.a1.slice(i, i + 500)).setValue(v);
     });
     // 3) เพิ่มแถว ต่อจากแถวสุดท้ายของเคลม (อยู่ใต้แถวที่จะลบทั้งหมด จึงไม่กระทบเลขแถวที่ลบ)
     let firstRow = null;

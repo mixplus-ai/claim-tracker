@@ -136,6 +136,17 @@ label.f input.err{border-color:var(--bad)}
 .bt input.dup{border-color:var(--bad);background:var(--bad-soft)}
 .bt tr.del td{opacity:.45;text-decoration:line-through}
 .bt tr.new td:first-child{color:var(--ok);font-weight:600}
+.dg td{padding:3px 4px;vertical-align:middle}
+.dg input[type=text]{width:100%;min-width:118px;padding:5px 7px;border:1px solid var(--line);border-radius:5px;background:var(--bg);font-family:var(--f-mono);font-size:12.5px}
+.dg input.dt{min-width:96px;width:100px}
+.dg input.chg{border-color:var(--accent);background:var(--accent-soft)}
+.dg input.err{border-color:var(--bad);background:var(--bad-soft)}
+.dg td.cn{font-family:var(--f-mono);font-weight:500;white-space:nowrap}
+.dg td.co{max-width:180px;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+.dg thead th{position:sticky;top:0;z-index:1}
+.dg thead tr.g th{top:0}.dg thead tr+tr th{top:31px}
+.dbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.dbar input,.dbar select{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);min-width:0}
 a.cl{color:var(--accent);font-family:var(--f-mono);cursor:pointer;text-decoration:underline}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -156,7 +167,8 @@ a.cl{color:var(--accent);font-family:var(--f-mono);cursor:pointer;text-decoratio
     <input id="q" type="search" placeholder="พิมพ์เลขเคลม เช่น 23-0312, รหัสสินค้า, SN, Case ID…" autocomplete="off">
   </div>
   <div class="actions">
-    <button class="btn primary" id="btnAll" type="button">กรอกรวมตามเลขเคลม</button>
+    <button class="btn primary" id="btnDocs" type="button">กรอกเลขที่ใบเบิกทุกเคลม</button>
+    <button class="btn" id="btnAll" type="button">กรอกรวมตามเลขเคลม</button>
     <button class="btn" id="btnNew" type="button">+ เปิดใบเคลมใหม่</button>
     <button class="btn" id="btnAudit" type="button">รายงานตรวจสอบ</button>
     <button class="btn" id="btnRefresh" type="button">รีเฟรช</button>
@@ -185,6 +197,27 @@ a.cl{color:var(--accent);font-family:var(--f-mono);cursor:pointer;text-decoratio
     <button class="btn primary" type="submit" id="rowSave">บันทึก</button>
   </footer>
 </form></dialog>
+
+<dialog id="dlgDocs" style="width:calc(100vw - 32px);max-width:1600px"><div class="dlg">
+  <header><h3>กรอกเลขที่ใบเบิกทุกเคลม</h3><button class="btn sm" type="button" data-close>ปิด</button></header>
+  <div class="body bulk">
+    <div class="dbar">
+      <input id="dQ" type="search" placeholder="ค้นหาเลขเคลม / บริษัท / เลขที่ใบเบิก" style="flex:1 1 220px">
+      <select id="dFilter" aria-label="แสดง"><option value="all">ทุกเคลม</option><option value="miss">ยังไม่มีเลขที่ใบเบิกบางขั้นตอน</option><option value="m2">ยังไม่มีเลขที่เบิก ขั้นตอน 2</option><option value="m3">ยังไม่มีเลขที่เบิก ขั้นตอน 3</option><option value="m4">ยังไม่มีเลขที่เบิก ขั้นตอน 4</option><option value="m5">ยังไม่มีเลขที่เบิก ขั้นตอน 5</option><option value="mixed">มีหลายเลขในเคลมเดียว</option><option value="chg">เฉพาะที่แก้ไขแล้ว</option></select>
+      <select id="dMode" aria-label="วิธีเขียน"><option value="all">เขียนลงทุกแถวของเคลม</option><option value="empty">ใส่เฉพาะแถวที่ยังว่าง</option></select>
+    </div>
+    <div class="tool"><b>ใส่ให้เคลมที่เลือก (ติ๊กช่องหน้าเลขเคลม)</b>
+      <div class="dbar"><select id="dBStage" aria-label="ขั้นตอน"></select><input id="dBDoc" placeholder="เลขที่ใบเบิก"><input id="dBDate" placeholder="วว/ดด/ปปปป" style="max-width:130px"><button class="btn sm" type="button" id="dBGo">ใส่ให้ที่เลือก</button><span class="hint" id="dSelInfo"></span></div></div>
+    <div class="hint" id="dInfo"></div>
+    <div id="dBody"></div>
+    <div class="dbar" id="dPager"></div>
+  </div>
+  <footer>
+    <span class="errtxt" id="dErr" style="margin-right:auto"></span>
+    <button class="btn" type="button" id="dReset">ล้างที่แก้ไข</button>
+    <button class="btn primary" type="button" id="dSave">บันทึกลงชีต</button>
+  </footer>
+</div></dialog>
 
 <dialog id="dlgPick" style="width:min(420px,calc(100vw - 32px))"><form class="dlg" id="formPick">
   <header><h3>กรอกรวมตามเลขเคลม</h3><button class="btn sm" type="button" data-close>ปิด</button></header>
@@ -627,6 +660,85 @@ $("#stSave").onclick=async()=>{
   }catch(err){$("#stErr").textContent=writeErr(err)}
   finally{$("#stSave").disabled=false;$("#stSave").textContent="บันทึกลงชีต"}
 };
+/* ---------- document numbers for every claim on one page ---------- */
+const DSTAGE=[1,2,3,4,5].map(k=>({k,doc:DOC_KEYS[k],date:STAGES[k-1].f.find(x=>x[3]==="date")[0]}));
+let docs={edits:new Map(),sel:new Set(),page:0,armed:false};
+const PAGE=100;
+function claimVals(c,key){return [...new Set(c.rows.map(r=>norm(r[key])).filter(Boolean))]}
+function docVisible(){
+  const q=low($("#dQ").value),f=$("#dFilter").value,out=[];
+  for(const c of claims.values()){
+    if(c.no==="(ไม่มีเลขเคลม)")continue;
+    if(q&&!(low(c.no).includes(q)||low(c.head.company).includes(q)||DSTAGE.some(d=>c.rows.some(r=>low(r[d.doc]).includes(q)))))continue;
+    const missing=k=>!c.rows.some(r=>norm(r[DOC_KEYS[k]]));
+    if(f==="miss"&&![2,3,4].some(missing))continue;
+    if(/^m\d$/.test(f)&&!missing(+f[1]))continue;
+    if(f==="mixed"&&!DSTAGE.some(d=>claimVals(c,d.doc).length>1))continue;
+    if(f==="chg"&&!docs.edits.has(c.no))continue;
+    out.push(c);
+  }
+  return out.sort((a,b)=>COLL.compare(a.no,b.no));
+}
+function docCell(c,key,cls){
+  const e=docs.edits.get(c.no),vals=claimVals(c,key),has=e&&key in e;
+  const v=has?e[key]:(vals.length===1?vals[0]:"");
+  const bad=cls==="dt"&&v&&!toISO(v);
+  return `<td><input type="text" class="${cls||""} ${has?"chg":""} ${bad?"err":""}" data-c="${esc(c.no)}" data-key="${key}" value="${esc(v)}" placeholder="${vals.length>1?`หลายค่า (${vals.length})`:cls==="dt"?"วว/ดด/ปปปป":""}" title="${esc(vals.join(", "))}"></td>`;
+}
+function renderDocs(){
+  const list=docVisible(),pages=Math.max(1,Math.ceil(list.length/PAGE));docs.page=Math.min(docs.page,pages-1);
+  const view=list.slice(docs.page*PAGE,(docs.page+1)*PAGE);
+  $("#dInfo").textContent=`${list.length} เคลม · แก้ไขแล้ว ${docs.edits.size} เคลม · เลือก ${docs.sel.size} เคลม`;
+  $("#dSelInfo").textContent=docs.sel.size?`เลือกอยู่ ${docs.sel.size} เคลม`:"";
+  $("#dBody").innerHTML=`<div class="tablewrap" style="max-height:56vh"><table class="bt dg"><thead>
+   <tr class="g"><th colspan="4"></th>${DSTAGE.map(d=>`<th colspan="2" style="background:var(${STAGES[d.k-1].c})">${d.k}. ${esc(STAGES[d.k-1].sub)}</th>`).join("")}</tr>
+   <tr><th><input type="checkbox" id="dAllSel" aria-label="เลือกทั้งหน้า"></th><th>เลขเคลม</th><th>บริษัท</th><th>หน่วย</th>${DSTAGE.map(d=>`<th>${d.k===1?"เลขใบสำคัญ":"เลขที่ใบเบิก"}</th><th>วันที่</th>`).join("")}</tr></thead><tbody>
+   ${view.map(c=>`<tr><td><input type="checkbox" data-sel="${esc(c.no)}" ${docs.sel.has(c.no)?"checked":""} aria-label="เลือก ${esc(c.no)}"></td><td class="cn"><a class="cl" data-open="${esc(c.no)}">${esc(c.no)}</a></td><td class="co" title="${esc(c.head.company)}">${esc(c.head.company)}</td><td class="mono">${c.rows.length}</td>
+     ${DSTAGE.map(d=>docCell(c,d.doc)+docCell(c,d.date,"dt")).join("")}</tr>`).join("")}
+  </tbody></table></div>`;
+  $("#dPager").innerHTML=pages>1?`<button class="btn sm" type="button" id="dPrev" ${docs.page?"":"disabled"}>‹ ก่อนหน้า</button><span class="hint">หน้า ${docs.page+1}/${pages}</span><button class="btn sm" type="button" id="dNext" ${docs.page<pages-1?"":"disabled"}>ถัดไป ›</button>`:"";
+  if($("#dPrev")){$("#dPrev").onclick=()=>{docs.page--;renderDocs()};$("#dNext").onclick=()=>{docs.page++;renderDocs()}}
+  const B=$("#dBody");
+  B.querySelectorAll("input[data-key]").forEach(inp=>inp.onchange=()=>{const c=claims.get(inp.dataset.c),k=inp.dataset.key,v=norm(inp.value),vals=claimVals(c,k);
+    const e=docs.edits.get(c.no)||{};if((vals.length===1&&v===vals[0])||(!v&&vals.length!==1))delete e[k];else e[k]=v;
+    if(Object.keys(e).length)docs.edits.set(c.no,e);else docs.edits.delete(c.no);
+    inp.classList.toggle("chg",k in e);inp.classList.toggle("err",inp.classList.contains("dt")&&!!v&&!toISO(v));docs.armed=false;
+    $("#dInfo").textContent=`${list.length} เคลม · แก้ไขแล้ว ${docs.edits.size} เคลม · เลือก ${docs.sel.size} เคลม`});
+  B.querySelectorAll("[data-sel]").forEach(cb=>cb.onchange=()=>{cb.checked?docs.sel.add(cb.dataset.sel):docs.sel.delete(cb.dataset.sel);$("#dSelInfo").textContent=docs.sel.size?`เลือกอยู่ ${docs.sel.size} เคลม`:""});
+  $("#dAllSel").onchange=e=>{view.forEach(c=>e.target.checked?docs.sel.add(c.no):docs.sel.delete(c.no));renderDocs()};
+  B.querySelectorAll("[data-open]").forEach(a=>a.onclick=()=>{$("#dlgDocs").close();auditOn=false;selected=a.dataset.open;renderList();renderDetail()});
+}
+$("#btnDocs").onclick=()=>{docs.page=0;docs.armed=false;$("#dErr").textContent="";$("#dBStage").innerHTML=DSTAGE.map(d=>`<option value="${d.k}">${d.k}. ${esc(STAGES[d.k-1].sub)}</option>`).join("");renderDocs();$("#dlgDocs").showModal()};
+let dqt;$("#dQ").oninput=()=>{clearTimeout(dqt);dqt=setTimeout(()=>{docs.page=0;renderDocs()},200)};
+$("#dFilter").onchange=()=>{docs.page=0;renderDocs()};
+$("#dBGo").onclick=()=>{
+  if(!docs.sel.size){$("#dErr").textContent="ติ๊กเลือกเคลมก่อน";return}
+  const d=DSTAGE[+$("#dBStage").value-1],doc=norm($("#dBDoc").value),dt=norm($("#dBDate").value);
+  if(!doc&&!dt){$("#dErr").textContent="กรอกเลขที่ใบเบิกหรือวันที่ก่อน";return}
+  if(dt&&!toISO(dt)){$("#dErr").textContent="วันที่ต้องเป็น วว/ดด/ปปปป";return}
+  for(const no of docs.sel){const e=docs.edits.get(no)||{};if(doc)e[d.doc]=doc;if(dt)e[d.date]=dt;docs.edits.set(no,e)}
+  $("#dErr").textContent="";toast(`ใส่ให้ ${docs.sel.size} เคลมแล้ว ยังไม่บันทึกจนกว่าจะกด “บันทึกลงชีต”`);docs.armed=false;renderDocs();
+};
+$("#dReset").onclick=()=>{docs.edits.clear();docs.sel.clear();docs.armed=false;$("#dErr").textContent="";renderDocs()};
+$("#dSave").onclick=async()=>{
+  if(!docs.edits.size){$("#dErr").textContent="ยังไม่มีอะไรแก้ไข";return}
+  const bad=[];for(const [no,e] of docs.edits)for(const k of Object.keys(e))if(/Date$|^vdate$/.test(k)&&e[k]&&!toISO(e[k]))bad.push(`${no}: ${e[k]}`);
+  if(bad.length){$("#dErr").textContent=`วันที่ไม่ถูกต้อง: ${bad.slice(0,3).join(", ")}${bad.length>3?` และอีก ${bad.length-3}`:""}`;return}
+  const onlyEmpty=$("#dMode").value==="empty",updates=[];
+  for(const [no,e] of docs.edits){const c=claims.get(no);if(!c)continue;
+    for(const r of c.rows){const patch={};for(const k of Object.keys(e)){if(onlyEmpty&&norm(r[k]))continue;if(norm(r[k])!==e[k])patch[k]=e[k]}
+      if(Object.keys(patch).length)updates.push({row:r.row,expect:{claimNo:r.claimNo},patch})}}
+  if(!updates.length){$("#dErr").textContent="ไม่มีแถวที่ต้องเปลี่ยน (ทุกแถวมีค่านี้อยู่แล้ว หรือไม่มีแถวว่าง)";return}
+  const cells=updates.reduce((n,u)=>n+Object.keys(u.patch).length,0);
+  if(!docs.armed){docs.armed=true;$("#dErr").textContent=`จะเขียน ${cells} ช่อง ใน ${updates.length} แถว ของ ${docs.edits.size} เคลม กด “บันทึกลงชีต” อีกครั้งเพื่อยืนยัน`;return}
+  docs.armed=false;$("#dSave").disabled=true;$("#dSave").textContent="กำลังบันทึกลงชีต…";
+  try{
+    for(let i=0;i<updates.length;i+=400){await run("saveBatch",{updates:updates.slice(i,i+400)});$("#dErr").textContent=`บันทึกแล้ว ${Math.min(i+400,updates.length)}/${updates.length} แถว…`}
+    toast(`บันทึก ${docs.edits.size} เคลม (${cells} ช่อง) ลงชีตแล้ว`);docs.edits.clear();docs.sel.clear();$("#dErr").textContent="";await load(true);renderDocs();
+  }catch(err){$("#dErr").textContent=writeErr(err)+" · ส่วนที่บันทึกไปแล้วจะอยู่ในชีต กดรีเฟรชแล้วตรวจอีกครั้ง"}
+  finally{$("#dSave").disabled=false;$("#dSave").textContent="บันทึกลงชีต"}
+};
+
 /* open the all-stage editor by claim number */
 $("#btnAll").onclick=()=>{$("#pickErr").textContent="";$("#pickNo").value=selected||"";$("#claimList").innerHTML=[...claims.keys()].map(n=>`<option value="${esc(n)}">`).join("");$("#dlgPick").showModal();$("#pickNo").focus()};
 $("#formPick").addEventListener("submit",e=>{e.preventDefault();const no=norm($("#pickNo").value),c=claims.get(no);if(!c){$("#pickErr").textContent=`ไม่พบเลขเคลม ${no}`;return}$("#dlgPick").close();selected=no;auditOn=false;renderList();renderDetail();openAll(c)});
