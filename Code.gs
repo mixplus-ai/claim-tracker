@@ -9,13 +9,23 @@ const CONFIG = {
   SHEET_NAME: '',          // ใช้เมื่อไม่ได้ใส่ SHEET_GID: ชื่อแท็บ เช่น 'Sheet1' (ว่าง = แท็บแรก)
   DATA_START_ROW: 6,       // แถวแรกของข้อมูล (แถว 1–5 เป็นหัวตาราง)
   LOG_SHEET: 'ประวัติแก้ไข', // ชีตเก็บประวัติการแก้ไขจาก Web app
-  // ผู้ดูแลระบบ (Admin) มีสิทธิ์เพิ่ม แก้ไข และลบข้อมูล ใส่อีเมล Google ได้ 2 บัญชี
-  // ทุกบัญชีที่ไม่อยู่ในรายการนี้เป็น ผู้ดู (Viewer) ดูได้อย่างเดียว
-  ADMINS: [
-    'mixplus.w@gmail.com',  // Admin 1
-    ''                      // Admin 2: ใส่อีเมล เช่น 'name@gmail.com'
-  ]
+  // Admin เข้าสู่ระบบด้วย ID และรหัสผ่าน (ตั้งค่าที่ฟังก์ชัน setupAdmins ด้านล่าง)
+  // ผู้ใช้ที่ไม่ได้เข้าสู่ระบบเป็น ผู้ดู (Viewer) ดูได้อย่างเดียว
+  ADMINS: [],              // (ไม่บังคับ) อีเมล Google ที่ให้เป็น Admin อัตโนมัติโดยไม่ต้องเข้าสู่ระบบ
+  SESSION_HOURS: 6         // อยู่ในระบบได้นานกี่ชั่วโมง (สูงสุด 6)
 };
+
+/**
+ * ตั้ง ID และรหัสผ่านของ Admin 2 บัญชี
+ * 1) ใส่ ID และรหัสผ่าน (อย่างน้อย 8 ตัวอักษร) แทนข้อความตัวอย่าง
+ * 2) เลือกฟังก์ชัน setupAdmins ในแถบด้านบนของ Apps Script แล้วกด เรียกใช้ (Run) 1 ครั้ง
+ * 3) ลบรหัสผ่านออกจากโค้ดแล้วกดบันทึก ระบบเก็บรหัสผ่านแบบเข้ารหัส (hash) ไว้แล้ว
+ * อยากเปลี่ยนรหัสผ่านเมื่อไร ทำซ้ำขั้นตอนเดิม ค่าที่ยังเป็นข้อความตัวอย่างจะไม่ถูกเปลี่ยน
+ */
+function setupAdmins() {
+  setAdmin_(1, 'admin1', 'ใส่รหัสผ่าน Admin 1');
+  setAdmin_(2, 'admin2', 'ใส่รหัสผ่าน Admin 2');
+}
 const NCOL = 26; // คอลัมน์ A–Z
 const COLS = ['pcode','vno','vdate','caseId','refId','claimNo','company','pickup','wh','qty',
   'issDoc','issDate','issSn','retPcode','retDoc','retDate','retSn','retNote',
@@ -52,21 +62,60 @@ function sheet_() {
   return sh;
 }
 
-/** สิทธิ์ของผู้ใช้ที่เปิด Web app: 'admin' หรือ 'viewer' */
-function role_(email) {
-  email = String(email || '').trim().toLowerCase();
-  if (!email) return 'viewer';
-  const admins = CONFIG.ADMINS.map(function (x) { return String(x || '').trim().toLowerCase(); }).filter(String);
-  return admins.indexOf(email) >= 0 ? 'admin' : 'viewer';
+/* ---------- สิทธิ์ผู้ใช้: Admin (ID + รหัสผ่าน) / ผู้ดู ---------- */
+function hash_(salt, pw) {
+  let h = salt + '|' + pw;
+  for (let i = 0; i < 500; i++) {
+    h = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, h, Utilities.Charset.UTF_8)
+      .map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join('');
+  }
+  return h;
 }
-function requireAdmin_() {
+function setAdmin_(slot, id, pw) {
+  id = String(id || '').trim(); pw = String(pw || '');
+  if (!id || /^ใส่/.test(pw)) { Logger.log('Admin ' + slot + ': ข้าม (ยังไม่ได้ใส่รหัสผ่าน)'); return; }
+  if (pw.length < 8) throw new Error('รหัสผ่านของ ' + id + ' ต้องยาวอย่างน้อย 8 ตัวอักษร');
+  const salt = Utilities.getUuid();
+  PropertiesService.getScriptProperties().setProperty('admin_' + slot, JSON.stringify({ id: id, salt: salt, hash: hash_(salt, pw) }));
+  Logger.log('ตั้งค่า Admin ' + slot + ' (ID: ' + id + ') เรียบร้อย');
+}
+function admins_() {
+  const p = PropertiesService.getScriptProperties();
+  return [1, 2].map(function (n) { try { return JSON.parse(p.getProperty('admin_' + n) || 'null'); } catch (e) { return null; } }).filter(Boolean);
+}
+/** เข้าสู่ระบบ Admin: คืน token สำหรับใช้บันทึกข้อมูล */
+function login(id, pw) {
+  id = String(id || '').trim();
+  const cache = CacheService.getScriptCache(), fk = 'fail_' + id.toLowerCase();
+  const fails = Number(cache.get(fk) || 0);
+  if (fails >= 5) throw new Error('ใส่รหัสผ่านผิดหลายครั้ง ลองใหม่อีกครั้งใน 15 นาที');
+  const a = admins_().filter(function (x) { return x.id.toLowerCase() === id.toLowerCase(); })[0];
+  if (!a || hash_(a.salt, String(pw || '')) !== a.hash) {
+    cache.put(fk, String(fails + 1), 900);
+    throw new Error('ID หรือรหัสผ่านไม่ถูกต้อง');
+  }
+  cache.remove(fk);
+  const token = Utilities.getUuid();
+  cache.put('tok_' + token, a.id, Math.min(6, CONFIG.SESSION_HOURS || 6) * 3600);
+  return { token: token, id: a.id, role: 'admin' };
+}
+function logout(token) { if (token) CacheService.getScriptCache().remove('tok_' + token); return true; }
+/** ผู้ใช้คนนี้เป็น Admin ไหม: คืนชื่อ Admin หรือ '' */
+function adminOf_(token) {
+  if (token) { const id = CacheService.getScriptCache().get('tok_' + token); if (id) return id; }
+  const email = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+  const list = (CONFIG.ADMINS || []).map(function (x) { return String(x || '').trim().toLowerCase(); }).filter(String);
+  return email && list.indexOf(email) >= 0 ? email : '';
+}
+function requireAdmin_(token) {
+  const id = adminOf_(token);
+  if (!id) throw new Error('ดูข้อมูลได้อย่างเดียว ต้องเข้าสู่ระบบ Admin ก่อนจึงจะเพิ่ม แก้ไข หรือลบได้ (หรือหมดเวลาเข้าสู่ระบบแล้ว)');
   const email = Session.getActiveUser().getEmail() || '';
-  if (role_(email) !== 'admin') throw new Error('บัญชี ' + (email || 'นี้') + ' ดูข้อมูลได้อย่างเดียว ไม่มีสิทธิ์เพิ่ม แก้ไข หรือลบ (ติดต่อ Admin)');
-  return email;
+  return email ? id + ' (' + email + ')' : id;
 }
 
 /** ข้อมูลทั้งหมด: values[i] คือแถว start+i (แถวว่างส่งเป็น []) */
-function getData() {
+function getData(token) {
   const sh = sheet_();
   const last = sh.getLastRow();
   const n = Math.max(0, last - CONFIG.DATA_START_ROW + 1);
@@ -76,7 +125,8 @@ function getData() {
     values: vals.map(function (r) { return r.some(function (c) { return String(c).trim(); }) ? r : []; }),
     rev: getRev(),
     user: Session.getActiveUser().getEmail() || '',
-    role: role_(Session.getActiveUser().getEmail())
+    role: adminOf_(token) ? 'admin' : 'viewer',
+    admin: adminOf_(token)
   };
 }
 
@@ -137,16 +187,16 @@ function check_(sh, row, expect, cache) {
  *   deletes: [{row, expect:{claimNo, issSn,...}}]                ลบทั้งแถว (เก็บค่าเดิมไว้ในประวัติ)
  * }
  */
-function saveBatch(b) {
+function saveBatch(b, token) {
   b = b || {};
   const updates = b.updates || [], deletes = b.deletes || [], ins = b.inserts || null;
   const insRows = ins && ins.rows ? ins.rows : [];
-  requireAdmin_();
+  const admin = requireAdmin_(token);
   if (insRows.length > 300) throw new Error('เพิ่มได้ครั้งละไม่เกิน 300 แถว');
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const sh = sheet_(), who = Session.getActiveUser().getEmail() || '', now = new Date(), logs = [];
+    const sh = sheet_(), who = admin, now = new Date(), logs = [];
     // 1) ตรวจทุกแถวก่อน ยังไม่เขียนอะไร
     // อ่านทั้งชีตครั้งเดียวเมื่อแก้หลายแถว (เร็วกว่าอ่านทีละแถว)
     const many = updates.length + deletes.length > 15;
@@ -195,18 +245,18 @@ function saveBatch(b) {
 }
 
 /** แก้ไขแถวเดิม: items = [{row, expect:{claimNo}, patch:{key:value}}] */
-function updateRows(items) { return saveBatch({ updates: items }); }
+function updateRows(items, token) { return saveBatch({ updates: items }, token); }
 
 /** เพิ่มแถวใหม่ต่อท้ายชีต: list = [{key:value}] */
-function addRows(list) { return saveBatch({ inserts: { rows: list } }); }
+function addRows(list, token) { return saveBatch({ inserts: { rows: list } }, token); }
 
 /** ลบแถว: items = [{row, expect:{claimNo, issSn}}] */
-function deleteRows(items) { return saveBatch({ deletes: items }); }
+function deleteRows(items, token) { return saveBatch({ deletes: items }, token); }
 
 /** เขียนตารางสรุปจากแดชบอร์ดลงแท็บ (ใช้ต่อกับ Looker Studio / ระบบรายงาน)
  *  tables = { "ชื่อแท็บ": [[หัวตาราง...], [ค่า...], ...] } */
-function writeSummary(tables) {
-  requireAdmin_();
+function writeSummary(tables, token) {
+  requireAdmin_(token);
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {

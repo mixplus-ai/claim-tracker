@@ -240,7 +240,7 @@ body.ro .w{display:none!important}
 </head><body class="ro">
 
 <header class="bar">
-  <div class="brand"><h1>CLAIM TRACKER</h1><span>SSC · SolarEdge</span><span class="role" id="roleBadge">กำลังตรวจสิทธิ์…</span></div>
+  <div class="brand"><h1>CLAIM TRACKER</h1><span>SSC · SolarEdge</span><span class="role" id="roleBadge">กำลังตรวจสิทธิ์…</span><button class="btn sm" type="button" id="btnLogin" hidden>เข้าสู่ระบบ Admin</button></div>
   <div class="search">
     <select id="scope" aria-label="ค้นหาจาก">
       <option value="all">ทุกช่อง</option>
@@ -295,6 +295,15 @@ body.ro .w{display:none!important}
   <div class="dash" id="dashBody"></div>
 </div></dialog>
 <div id="dTip" hidden></div>
+<dialog id="dlgLogin" style="width:min(380px,calc(100vw - 32px))"><form class="dlg" id="formLogin" method="dialog">
+  <header><h3>เข้าสู่ระบบ Admin</h3><button class="btn sm" type="button" data-close>ปิด</button></header>
+  <div class="body" style="padding:16px;display:grid;gap:10px">
+    <label class="f">ID<input id="lgId" autocomplete="username" required></label>
+    <label class="f">รหัสผ่าน<input id="lgPw" type="password" autocomplete="current-password" required></label>
+    <span class="errtxt" id="lgErr"></span>
+  </div>
+  <footer><button class="btn primary" type="submit" id="lgGo">เข้าสู่ระบบ</button></footer>
+</form></dialog>
 <dialog id="dlgPrint"><div class="dlg">
   <header><h3 id="prTitle">พิมพ์ / ส่งออกใบเคลม</h3><div class="actions">
     <button class="btn sm primary" type="button" id="prPrint">พิมพ์</button>
@@ -369,7 +378,10 @@ const norm=v=>String(v==null?"":v).trim();
 const low=v=>norm(v).toLowerCase();
 
 let user=null,canWrite=false,role="viewer",lastRev=null,loadedAt=null,me="";
-const run=(fn,...a)=>new Promise((res,rej)=>google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...a));
+const WRITE_FNS=new Set(["saveBatch","updateRows","addRows","deleteRows","writeSummary"]);
+function sess(k,v){try{if(v===undefined)return sessionStorage.getItem(k);if(v===null)sessionStorage.removeItem(k);else sessionStorage.setItem(k,v)}catch(e){return null}}
+let authTok=sess("claim.tok")||"";
+const run=(fn,...a)=>new Promise((res,rej)=>{if(WRITE_FNS.has(fn))a=[...a,authTok];google.script.run.withSuccessHandler(res).withFailureHandler(e=>{if(WRITE_FNS.has(fn)&&/เข้าสู่ระบบ Admin/.test((e&&e.message)||""))setRole("viewer","");rej(e)})[fn](...a)});
 const downloads={save:({filename,data})=>{const u=URL.createObjectURL(new Blob([data],{type:"text/csv;charset=utf-8"}));const a=document.createElement("a");a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);return Promise.resolve({status:"saved"})}};
 let rows=[];            // [{id, ...fields}]
 let claims=new Map();   // claimNo -> {no, rows, qty, st:[...]}
@@ -1020,12 +1032,19 @@ $("#btnExport").onclick=async()=>{
 };
 
 /* ---------- roles ---------- */
-function setRole(r,email){
+function setRole(r,who){
   role=r==="admin"?"admin":"viewer";canWrite=role==="admin";
   document.body.classList.toggle("ro",!canWrite);
   const b=$("#roleBadge");b.className="role"+(canWrite?" admin":"");
-  b.textContent=canWrite?"Admin · แก้ไขได้":"ผู้ดู · อ่านอย่างเดียว";b.title=email||"";
+  b.textContent=canWrite?`Admin: ${who||""} · แก้ไขได้`:"ผู้ดู · อ่านอย่างเดียว";
+  const l=$("#btnLogin");l.hidden=false;l.textContent=canWrite?(authTok?"ออกจากระบบ":"Admin (อีเมล)"):"เข้าสู่ระบบ Admin";l.disabled=canWrite&&!authTok;
 }
+$("#btnLogin").onclick=async()=>{
+  if(canWrite){if(!authTok)return;try{await run("logout",authTok)}catch(e){}authTok="";sess("claim.tok",null);setRole("viewer","");toast("ออกจากระบบแล้ว");return}
+  $("#lgErr").textContent="";$("#lgPw").value="";$("#dlgLogin").showModal();$("#lgId").focus()};
+$("#formLogin").addEventListener("submit",async e=>{e.preventDefault();const go=$("#lgGo");go.disabled=true;$("#lgErr").textContent="";
+  try{const r=await run("login",norm($("#lgId").value),$("#lgPw").value);authTok=r.token;sess("claim.tok",authTok);$("#lgPw").value="";$("#dlgLogin").close();setRole("admin",r.id);toast(`เข้าสู่ระบบ Admin (${r.id}) แล้ว`)}
+  catch(err){$("#lgErr").textContent=(err&&err.message)||"เข้าสู่ระบบไม่สำเร็จ"}finally{go.disabled=false}});
 
 /* ---------- claim printout: A4 landscape (print, PDF, PNG, XLSX) ---------- */
 const LIBS={h2c:"https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js",pdf:"https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js",xl:"https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"};
@@ -1185,8 +1204,8 @@ async function load(force){
   if(loading)return;loading=true;
   try{
     if(!force&&lastRev){const rev=await run("getRev");if(rev===lastRev)return}
-    const d=await run("getData");
-    rows=fromSheet(d);lastRev=d.rev;me=d.user||me;loadedAt=new Date();setRole(d.role,d.user);
+    const d=await run("getData",authTok);
+    rows=fromSheet(d);lastRev=d.rev;me=d.user||me;loadedAt=new Date();if(authTok&&d.role!=="admin"){authTok="";sess("claim.tok",null)}setRole(d.role,d.admin);
     notice("");renderAll();
   }catch(e){notice("โหลดข้อมูลจากชีตไม่สำเร็จ: "+((e&&e.message)||"ลองกดรีเฟรช"),true)}
   finally{loading=false;stampTime()}
