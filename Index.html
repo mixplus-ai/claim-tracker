@@ -122,6 +122,9 @@ label.f input.err{border-color:var(--bad)}
 .acat small{display:block;color:var(--muted);font-size:11.5px}
 .stage .btn{margin-top:8px;display:block;width:100%}
 .bulk{display:grid;gap:10px}
+.dlg .body>*,.bulk>*,.bulk .tools>*{min-width:0}
+.bt.pn{width:auto}
+.bt.pn input{min-width:150px}
 .bulk .tools{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
 .bulk .tool{border:1px solid var(--line);border-radius:var(--r);padding:10px;display:grid;gap:6px;min-width:0}
 .bulk .tool b{font-size:12.5px}
@@ -153,7 +156,8 @@ a.cl{color:var(--accent);font-family:var(--f-mono);cursor:pointer;text-decoratio
     <input id="q" type="search" placeholder="พิมพ์เลขเคลม เช่น 23-0312, รหัสสินค้า, SN, Case ID…" autocomplete="off">
   </div>
   <div class="actions">
-    <button class="btn primary" id="btnNew" type="button">+ เปิดใบเคลมใหม่</button>
+    <button class="btn primary" id="btnAll" type="button">กรอกรวมตามเลขเคลม</button>
+    <button class="btn" id="btnNew" type="button">+ เปิดใบเคลมใหม่</button>
     <button class="btn" id="btnAudit" type="button">รายงานตรวจสอบ</button>
     <button class="btn" id="btnRefresh" type="button">รีเฟรช</button>
     <button class="btn" id="btnExport" type="button">ส่งออก CSV</button>
@@ -182,7 +186,13 @@ a.cl{color:var(--accent);font-family:var(--f-mono);cursor:pointer;text-decoratio
   </footer>
 </form></dialog>
 
-<dialog id="dlgStage" style="width:min(1100px,calc(100vw - 32px))"><div class="dlg">
+<dialog id="dlgPick" style="width:min(420px,calc(100vw - 32px))"><form class="dlg" id="formPick">
+  <header><h3>กรอกรวมตามเลขเคลม</h3><button class="btn sm" type="button" data-close>ปิด</button></header>
+  <div class="body"><label class="f">เลขเคลม<input id="pickNo" list="claimList" autocomplete="off" placeholder="เช่น 24-0056" required></label><datalist id="claimList"></datalist><span class="errtxt" id="pickErr"></span></div>
+  <footer><button class="btn" type="button" data-close>ยกเลิก</button><button class="btn primary" type="submit">เปิดหน้ากรอก</button></footer>
+</form></dialog>
+
+<dialog id="dlgStage" style="width:min(1400px,calc(100vw - 32px))"><div class="dlg">
   <header><h3 id="stTitle">กรอกทั้งเคลม</h3><button class="btn sm" type="button" data-close>ปิด</button></header>
   <div class="body bulk"><div class="tools" id="stTools"></div><div class="hint" id="stCount"></div><div id="stBody"></div></div>
   <footer>
@@ -405,8 +415,9 @@ function renderDetail(){
     <div class="dhead">
       <div><div class="sub">เลขเคลม</div><h2 class="mono" style="font-size:26px">${esc(c.no)}</h2><div class="sub">${esc(h.company)}</div></div>
       <div class="actions">
+        <button class="btn primary" type="button" id="dEditAll">กรอกรวมทุกขั้นตอน</button>
         <button class="btn" type="button" id="dEditHead">แก้ไขข้อมูลใบเคลม</button>
-        <button class="btn primary" type="button" id="dAddUnit">+ เพิ่มหน่วยสินค้า</button>
+        <button class="btn" type="button" id="dAddUnit">+ เพิ่มหน่วยสินค้า</button>
       </div>
     </div>
     <div class="kv">${STAGES[0].f.filter(x=>x[0]!=="claimNo"&&x[0]!=="company").map(([k,l])=>`<div><small>${esc(l)}</small><span class="${/pcode|vno|caseId|refId/.test(k)?"mono":""}">${cell(h,k)}</span></div>`).join("")}</div>
@@ -433,6 +444,7 @@ function renderDetail(){
   </div>
   <div class="legend"><span><i style="background:var(--ok)"></i>ครบตามจำนวน</span><span><i style="background:var(--warn)"></i>ยังไม่ครบ</span><span><i style="background:var(--bad)"></i>เกินจำนวน / ข้อมูลไม่ตรง</span><span><i style="background:var(--s5)"></i>ขั้นตอน 5 นับเฉพาะรายการที่มี</span></div>`;
   $("#dEditHead").onclick=()=>openRow(c.rows[0],"head");
+  $("#dEditAll").onclick=()=>openAll(c);
   box.querySelectorAll("[data-stage]").forEach(b=>b.onclick=()=>{const k=+b.dataset.stage;if(k===1)openRow(c.rows[0],"head");else openStage(c,k)});
   $("#dAddUnit").onclick=()=>openRow({...pick(h,HEADER_FIELDS),pcode:h.pcode},"add");
   box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openRow(rows.find(r=>r.id===b.dataset.edit),"edit"));
@@ -519,60 +531,84 @@ $("#rowDelete").onclick=async()=>{
   finally{$("#rowDelete").disabled=false}
 };
 
-/* ---------- per-stage bulk editor ---------- */
+/* ---------- bulk editor: one stage, or every stage on one page ---------- */
 let bulk=null;
-function openStage(c,k){
-  const s=STAGES[k-1];
-  bulk={c,s,items:c.rows.map(r=>({r,v:pick(r,s.f.map(x=>x[0])),del:false})),delArmed:false};
+const DOC_KEYS={1:"vno",2:"issDoc",3:"retDoc",4:"rcvDoc",5:"okDoc"};
+function stageFields(k,all){const s=STAGES[k-1];return (k===1?s.f.filter(x=>x[0]==="vno"||x[0]==="vdate"):s.f).map(x=>({k:x[0],l:x[1],col:x[2],type:x[3],st:k}))}
+function openStage(c,k){openBulk(c,[k])}
+function openAll(c){openBulk(c,[1,2,3,4,5])}
+function openBulk(c,ks){
+  const all=ks.length>1,F=ks.flatMap(k=>stageFields(k,all)),snKeys=ks.filter(k=>k>1).map(k=>STAGES[k-1].sn);
+  bulk={c,ks,all,F,snKeys,items:c.rows.map(r=>({r,v:pick(r,F.map(f=>f.k)),del:false})),delArmed:false};
   $("#stErr").textContent="";
-  $("#stTitle").textContent=`ขั้นตอน ${s.k} · ${s.t} · เคลม ${c.no}`;
-  const other=s.f.filter(x=>x[0]!==s.sn);
-  $("#stTools").innerHTML=`
-   <div class="tool"><b>วาง ${esc(LABEL[s.sn])} หลายตัว</b><span class="hint">1 บรรทัด = 1 SN (คัดลอกจาก Excel/ชีตได้) จะเติมลงแถวที่ว่างก่อน ถ้าเกินจะเพิ่มแถวใหม่ให้</span>
+  $("#stTitle").textContent=all?`กรอกรวมทุกขั้นตอน · เคลม ${c.no} · ${c.rows.length} หน่วย`:`ขั้นตอน ${ks[0]} · ${STAGES[ks[0]-1].t} · เคลม ${c.no}`;
+  const fillable=F.filter(f=>!snKeys.includes(f.k));
+  const docPanel=all?`<div class="tool" style="grid-column:1/-1"><b>เลขที่ใบเบิก / วันที่ ของแต่ละขั้นตอน</b><span class="hint">กรอกครั้งเดียวแล้วกด “ใส่ทุกแถว” หรือ “เฉพาะแถวที่ว่าง” ค่าในช่องคือค่าปัจจุบันถ้าทุกแถวเหมือนกัน</span>
+     <div class="tablewrap"><table class="bt pn"><thead><tr><th>ขั้นตอน</th><th>เลขที่ใบเบิก / ใบสำคัญ</th><th>วันที่</th><th>รหัสสินค้า</th><th></th></tr></thead><tbody>
+     ${ks.map(k=>{const fs=stageFields(k,true),doc=fs.find(f=>f.k===DOC_KEYS[k]),dt=fs.find(f=>f.type==="date"),pc=fs.find(f=>/Pcode$/.test(f.k));
+       const cur=key=>{if(!key)return {v:"",n:0};const vals=[...new Set(c.rows.map(r=>norm(r[key])).filter(Boolean))];return {v:vals.length===1?vals[0]:"",n:vals.length}};
+       const inp=(f)=>{if(!f)return `<span class="hint">–</span>`;const cu=cur(f.k);return `<input data-pk="${f.k}" data-st="${k}" value="${esc(cu.v)}" placeholder="${cu.n>1?`มีหลายค่า (${cu.n})`:f.type==="date"?"วว/ดด/ปปปป":""}">`};
+       return `<tr><td style="white-space:normal;min-width:150px"><span style="color:var(${STAGES[k-1].c});font-weight:600">${k}.</span> ${esc(STAGES[k-1].sub)}</td><td>${inp(doc)}</td><td>${inp(dt)}</td><td>${inp(pc)}</td>
+       <td style="white-space:nowrap"><button class="btn sm" type="button" data-pfill="${k}" data-all="1">ใส่ทุกแถว</button> <button class="btn sm" type="button" data-pfill="${k}">เฉพาะแถวว่าง</button></td></tr>`}).join("")}
+     </tbody></table></div>
+     <div class="row2"><button class="btn sm" type="button" id="pFillAllEmpty">ใส่ทุกขั้นตอน (เฉพาะแถวว่าง)</button></div></div>`:"";
+  $("#stTools").innerHTML=docPanel+(snKeys.length?`
+   <div class="tool"><b>วาง SN หลายตัว</b><span class="hint">1 บรรทัด = 1 SN จะเติมลงแถวที่ว่างก่อน ถ้าเกินจะเพิ่มแถวใหม่ให้</span>
+     ${snKeys.length>1?`<div class="row2"><select id="stPasteKey">${snKeys.map(k=>`<option value="${k}">${esc(LABEL[k])}</option>`).join("")}</select></div>`:""}
      <textarea id="stPaste" placeholder="SJ1234-07B0AAAAA-01&#10;SJ1234-07B0AAAAB-02"></textarea>
-     <div class="row2"><button class="btn sm" type="button" id="stPasteGo">เติม SN</button><span class="hint" id="stPasteInfo"></span></div></div>
+     <div class="row2"><button class="btn sm" type="button" id="stPasteGo">เติม SN</button><span class="hint" id="stPasteInfo"></span></div></div>`:"")+(all?"":`
    <div class="tool"><b>ใส่ค่าเดียวกันหลายแถว</b><span class="hint">เช่น เลขที่เบิก หรือวันที่ ที่เหมือนกันทั้งชุด</span>
-     <div class="row2"><select id="stFillKey">${other.map(x=>`<option value="${x[0]}">${esc(x[1])}</option>`).join("")}</select></div>
+     <div class="row2"><select id="stFillKey">${fillable.map(f=>`<option value="${f.k}">${esc(f.l)}</option>`).join("")}</select></div>
      <div class="row2"><input id="stFillVal" type="text" placeholder="ค่าที่จะใส่ (วันที่ใช้ วว/ดด/ปปปป)"></div>
-     <div class="row2"><button class="btn sm" type="button" id="stFillEmpty">ใส่เฉพาะแถวที่ว่าง</button><button class="btn sm" type="button" id="stFillAll">ใส่ทุกแถว</button></div></div>
+     <div class="row2"><button class="btn sm" type="button" id="stFillEmpty">ใส่เฉพาะแถวที่ว่าง</button><button class="btn sm" type="button" id="stFillAll">ใส่ทุกแถว</button></div></div>`)+`
    <div class="tool"><b>เพิ่มแถว (หน่วยสินค้า)</b><span class="hint">แถวใหม่จะคัดลอกข้อมูลใบเคลมและแทรกต่อจากเคลมนี้ในชีต</span>
      <div class="row2"><input id="stAddN" type="number" min="1" max="300" value="1" style="max-width:90px"><button class="btn sm" type="button" id="stAdd">+ เพิ่มแถว</button></div></div>`;
-  $("#stPasteGo").onclick=()=>{syncBulk();const list=$("#stPaste").value.split(/[\r\n\t]+/).map(norm).filter(Boolean);let i=0,filled=0,added=0;
-    for(const it of bulk.items){if(i>=list.length)break;if(!it.del&&!norm(it.v[s.sn])){it.v[s.sn]=list[i++];filled++}}
-    while(i<list.length){bulk.items.push(newItem({[s.sn]:list[i++]}));added++}
+  const T=$("#stTools");
+  if($("#stPasteGo"))$("#stPasteGo").onclick=()=>{syncBulk();const key=$("#stPasteKey")?$("#stPasteKey").value:snKeys[0];const list=$("#stPaste").value.split(/[\r\n\t]+/).map(norm).filter(Boolean);let i=0,filled=0,added=0;
+    for(const it of bulk.items){if(i>=list.length)break;if(!it.del&&!norm(it.v[key])){it.v[key]=list[i++];filled++}}
+    while(i<list.length){bulk.items.push(newItem({[key]:list[i++]}));added++}
     $("#stPasteInfo").textContent=`เติม ${filled} แถว${added?` · เพิ่มแถวใหม่ ${added}`:""}`;$("#stPaste").value="";renderBulk()};
-  const fill=all=>{syncBulk();const k2=$("#stFillKey").value,val=norm($("#stFillVal").value);for(const it of bulk.items)if(!it.del&&(all||!norm(it.v[k2])))it.v[k2]=val;renderBulk()};
-  $("#stFillEmpty").onclick=()=>fill(false);$("#stFillAll").onclick=()=>fill(true);
+  const fillKey=(key,val,allRows)=>{for(const it of bulk.items)if(!it.del&&(allRows||!norm(it.v[key])))it.v[key]=val};
+  if($("#stFillAll")){const fill=allRows=>{syncBulk();fillKey($("#stFillKey").value,norm($("#stFillVal").value),allRows);renderBulk()};$("#stFillEmpty").onclick=()=>fill(false);$("#stFillAll").onclick=()=>fill(true)}
+  const panelFill=(k,allRows)=>{T.querySelectorAll(`input[data-st="${k}"]`).forEach(inp=>{const v=norm(inp.value);if(v)fillKey(inp.dataset.pk,v,allRows)})};
+  T.querySelectorAll("[data-pfill]").forEach(bt=>bt.onclick=()=>{syncBulk();panelFill(+bt.dataset.pfill,!!bt.dataset.all);renderBulk()});
+  if($("#pFillAllEmpty"))$("#pFillAllEmpty").onclick=()=>{syncBulk();ks.forEach(k=>panelFill(k,false));renderBulk()};
   $("#stAdd").onclick=()=>{syncBulk();const n=Math.min(300,Math.max(1,parseInt($("#stAddN").value,10)||1));for(let i=0;i<n;i++)bulk.items.push(newItem({}));renderBulk()};
   renderBulk();$("#dlgStage").showModal();
 }
-function newItem(v){const h=bulk.c.head,o={};bulk.s.f.forEach(x=>o[x[0]]=/Pcode$/.test(x[0])?norm(h.pcode):"");return {r:null,v:{...o,...v},del:false,hdr:{...pick(h,HEADER_FIELDS),pcode:h.pcode}}}
+function newItem(v){const h=bulk.c.head,o={};bulk.F.forEach(f=>o[f.k]=/Pcode$/.test(f.k)?norm(h.pcode):(f.st===1?norm(h[f.k]):""));return {r:null,v:{...o,...v},del:false,hdr:{...pick(h,HEADER_FIELDS),pcode:h.pcode}}}
 function syncBulk(){if(!bulk)return;$("#stBody").querySelectorAll("input[data-i]").forEach(inp=>{const it=bulk.items[+inp.dataset.i];if(inp.type==="checkbox")it.del=inp.checked;else it.v[inp.dataset.k]=norm(inp.value)})}
 function bulkDupes(){
-  const s=bulk.s,seen=new Map(),bad=new Set(),msgs=[];
-  const mine=new Set(bulk.items.filter(it=>it.r).map(it=>it.r.id));
-  bulk.items.forEach((it,i)=>{if(it.del)return;const v=low(it.v[s.sn]);if(!v||isNote(v))return;if(seen.has(v)){bad.add(i);bad.add(seen.get(v));}else seen.set(v,i)});
-  if(bad.size)msgs.push(`${LABEL[s.sn]} ซ้ำกันในตาราง ${bad.size} ช่อง`);
-  bulk.items.forEach((it,i)=>{if(it.del)return;const v=low(it.v[s.sn]);if(!v||isNote(v)||(it.r&&v===low(it.r[s.sn])))return;const d=rows.find(r=>!mine.has(r.id)&&low(r[s.sn])===v);if(d){bad.add(i);msgs.push(`${it.v[s.sn]} มีอยู่แล้วในเคลม ${d.claimNo}`)}});
-  return {bad,msgs};
+  const bad=new Set(),msgs=[],warns=[],mine=new Set(bulk.items.filter(it=>it.r).map(it=>it.r.id));
+  for(const sk of bulk.snKeys){
+    const groups=new Map(),changed=it=>!it.r||low(it.v[sk])!==low(it.r[sk]);
+    bulk.items.forEach((it,i)=>{if(it.del)return;const v=low(it.v[sk]);if(!v||isNote(v))return;if(!groups.has(v))groups.set(v,[]);groups.get(v).push(i)});
+    for(const [v,idx] of groups){if(idx.length<2)continue;idx.forEach(i=>bad.add(sk+":"+i));
+      if(idx.some(i=>changed(bulk.items[i])))msgs.push(`${LABEL[sk]} ${bulk.items[idx[0]].v[sk]} ซ้ำกัน ${idx.length} แถว`);else warns.push(`${LABEL[sk]} ${bulk.items[idx[0]].v[sk]} ซ้ำอยู่เดิมในชีต`)}
+    bulk.items.forEach((it,i)=>{if(it.del)return;const v=low(it.v[sk]);if(!v||isNote(v)||(it.r&&v===low(it.r[sk])))return;const d=rows.find(r=>!mine.has(r.id)&&low(r[sk])===v);if(d){bad.add(sk+":"+i);msgs.push(`${it.v[sk]} มีอยู่แล้วในเคลม ${d.claimNo}`)}});
+  }
+  return {bad,msgs,warns};
 }
 function renderBulk(){
-  const s=bulk.s,ref=s.k>2?"issSn":null,items=bulk.items,{bad}=bulkDupes();
-  const live=items.filter(it=>!it.del),cnt=live.filter(it=>norm(it.v[s.sn])).length;
-  $("#stCount").textContent=`กรอก ${LABEL[s.sn]} แล้ว ${cnt}/${live.length} แถว`+(items.some(it=>it.del)?` · จะลบ ${items.filter(it=>it.del).length} แถว`:"")+(items.some(it=>!it.r)?` · แถวใหม่ ${items.filter(it=>!it.r&&!it.del).length}`:"");
-  $("#stBody").innerHTML=`<div class="tablewrap" style="max-height:52vh"><table class="bt"><thead><tr><th>#</th><th>แถวชีต</th><th>รหัสสินค้า</th>${ref?`<th>${esc(LABEL[ref])}</th>`:""}${s.f.map(x=>`<th>${esc(x[1])}</th>`).join("")}<th>ลบ</th></tr></thead><tbody>
+  const {F,ks,items,all}=bulk,{bad}=bulkDupes(),ref=!all&&ks[0]>2?"issSn":null;
+  const live=items.filter(it=>!it.del);
+  const w=bulkDupes().warns;
+  $("#stCount").textContent=(w.length?`⚠ ${w.slice(0,3).join(" · ")}${w.length>3?` (+${w.length-3})`:""} · `:"")+bulk.snKeys.map(k=>`${LABEL[k]} ${live.filter(it=>norm(it.v[k])).length}/${live.length}`).join(" · ")+(items.some(it=>it.del)?` · จะลบ ${items.filter(it=>it.del).length} แถว`:"")+(items.some(it=>!it.r&&!it.del)?` · แถวใหม่ ${items.filter(it=>!it.r&&!it.del).length}`:"");
+  const groups=ks.map(k=>({k,n:F.filter(f=>f.st===k).length}));
+  $("#stBody").innerHTML=`<div class="tablewrap" style="max-height:${all?46:52}vh"><table class="bt"><thead>
+   ${all?`<tr class="g"><th colspan="3"></th>${groups.map(g=>`<th colspan="${g.n}" style="background:var(${STAGES[g.k-1].c})">${g.k}. ${esc(STAGES[g.k-1].sub)}</th>`).join("")}<th></th></tr>`:""}
+   <tr><th>#</th><th>แถวชีต</th><th>รหัสสินค้า</th>${ref?`<th>${esc(LABEL[ref])}</th>`:""}${F.map(f=>`<th>${esc(f.l)}</th>`).join("")}<th>ลบ</th></tr></thead><tbody>
    ${items.map((it,i)=>`<tr class="${it.del?"del":""} ${it.r?"":"new"}"><td class="mono">${i+1}</td><td class="mono">${it.r?it.r.row:"ใหม่"}</td><td class="mono">${esc(it.r?it.r.pcode:it.hdr.pcode)}</td>${ref?`<td class="mono">${esc(it.r?it.r[ref]:"")||"–"}</td>`:""}
-   ${s.f.map(x=>`<td><input data-i="${i}" data-k="${x[0]}" value="${esc(it.v[x[0]])}" ${x[3]==="date"?'placeholder="วว/ดด/ปปปป"':""} class="${x[0]===s.sn&&bad.has(i)?"dup":""}"></td>`).join("")}
+   ${F.map(f=>`<td><input data-i="${i}" data-k="${f.k}" value="${esc(it.v[f.k])}" ${f.type==="date"?'placeholder="วว/ดด/ปปปป"':""} class="${bad.has(f.k+":"+i)?"dup":""}"></td>`).join("")}
    <td><input type="checkbox" data-i="${i}" ${it.del?"checked":""} aria-label="ลบแถว ${i+1}" style="min-width:0;width:auto"></td></tr>`).join("")}
   </tbody></table></div>`;
   $("#stBody").querySelectorAll("input[type=checkbox]").forEach(cb=>cb.onchange=()=>{syncBulk();bulk.delArmed=false;renderBulk()});
-  $("#stBody").querySelectorAll("input[data-k]").forEach(inp=>inp.onchange=()=>{syncBulk();const {bad}=bulkDupes();$("#stBody").querySelectorAll(`input[data-k="${s.sn}"]`).forEach(x=>x.classList.toggle("dup",bad.has(+x.dataset.i)))});
+  $("#stBody").querySelectorAll("input[data-k]").forEach(inp=>inp.onchange=()=>{syncBulk();const {bad}=bulkDupes();$("#stBody").querySelectorAll("input[data-k]").forEach(x=>x.classList.toggle("dup",bad.has(x.dataset.k+":"+x.dataset.i)))});
 }
 $("#stSave").onclick=async()=>{
-  syncBulk();const {s,c,items}=bulk,errs=[];
-  const {msgs}=bulkDupes();errs.push(...msgs);
-  const dk=s.f.find(x=>x[3]==="date")[0];
-  items.forEach((it,i)=>{if(!it.del&&norm(it.v[dk])&&!toISO(it.v[dk]))errs.push(`แถว ${i+1}: วันที่ “${it.v[dk]}” ต้องเป็น วว/ดด/ปปปป`)});
+  syncBulk();const {F,c,items}=bulk,errs=[];
+  errs.push(...bulkDupes().msgs);
+  items.forEach((it,i)=>{if(it.del)return;F.filter(f=>f.type==="date").forEach(f=>{if(norm(it.v[f.k])&&!toISO(it.v[f.k]))errs.push(`แถว ${i+1}: ${f.l} “${it.v[f.k]}” ต้องเป็น วว/ดด/ปปปป`)})});
   if(errs.length){$("#stErr").textContent=errs.slice(0,4).join(" · ")+(errs.length>4?` และอีก ${errs.length-4} รายการ`:"");return}
   const updates=[],inserts=[],deletes=[];
   for(const it of items){
@@ -591,6 +627,9 @@ $("#stSave").onclick=async()=>{
   }catch(err){$("#stErr").textContent=writeErr(err)}
   finally{$("#stSave").disabled=false;$("#stSave").textContent="บันทึกลงชีต"}
 };
+/* open the all-stage editor by claim number */
+$("#btnAll").onclick=()=>{$("#pickErr").textContent="";$("#pickNo").value=selected||"";$("#claimList").innerHTML=[...claims.keys()].map(n=>`<option value="${esc(n)}">`).join("");$("#dlgPick").showModal();$("#pickNo").focus()};
+$("#formPick").addEventListener("submit",e=>{e.preventDefault();const no=norm($("#pickNo").value),c=claims.get(no);if(!c){$("#pickErr").textContent=`ไม่พบเลขเคลม ${no}`;return}$("#dlgPick").close();selected=no;auditOn=false;renderList();renderDetail();openAll(c)});
 function blank(){const o={};for(const k of COLS)o[k]="";return o}
 function nextSeq(){return rows.reduce((m,r)=>Math.max(m,r.seq||0),0)+1}
 function writeErr(e){
