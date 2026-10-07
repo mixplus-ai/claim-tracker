@@ -15,7 +15,7 @@ const COLS = ['pcode','vno','vdate','caseId','refId','claimNo','company','pickup
   'issDoc','issDate','issSn','retPcode','retDoc','retDate','retSn','retNote',
   'rcvPcode','rcvDoc','rcvDate','rcvSn','okPcode','okDoc','okDate','okSn'];
 const DATE_KEYS = ['vdate','issDate','retDate','rcvDate','okDate'];
-const LABELS = ['รหัสสินค้า','เลขใบสำคัญ','วันที่ใบสำคัญ','Case ID','เลขอ้างอิง (E)','เลขเคลม','ชื่อบริษัท','วันนัดรับ','รหัส (I)','จำนวน',
+const LABELS = ['รหัสสินค้า','เลขใบสำคัญ','วันที่ใบสำคัญ','Case ID','เลข SiteID (E)','เลขเคลม','ชื่อบริษัท','วันนัดรับ','รหัสเซลล์ (I)','จำนวน',
   'เลขที่เบิก MAC5','วันที่เบิก','SN เบิก','รหัสสินค้า (คืน)','เลขที่เบิก (คืน)','วันที่ (คืน)','SN คืน','หมายเหตุ',
   'รหัสสินค้า (รับ)','เลขที่เบิก (รับ)','วันที่ (รับ)','SN รับ','รหัสสินค้า (จ่าย)','เลขที่เบิก (จ่าย)','วันที่ (จ่าย)','SN จ่าย'];
 
@@ -94,52 +94,78 @@ function log_(rows) {
   lg.getRange(lg.getLastRow() + 1, 1, rows.length, 7).setValues(rows);
 }
 
+/** ตรวจว่าแถวในชีตยังเป็นข้อมูลเดิม (กันเขียน/ลบผิดแถวเมื่อมีคนแทรกหรือลบแถวระหว่างนั้น) */
+function check_(sh, row, expect) {
+  if (!(row >= CONFIG.DATA_START_ROW) || row > sh.getLastRow()) throw new Error('แถว ' + row + ' ไม่มีในชีตแล้ว กรุณากดรีเฟรช');
+  const r = sh.getRange(row, 1, 1, NCOL).getDisplayValues()[0];
+  Object.keys(expect || {}).forEach(function (k) {
+    const j = COLS.indexOf(k);
+    if (j >= 0 && String(r[j]).trim() !== String(expect[k] == null ? '' : expect[k]).trim())
+      throw new Error('แถว ' + row + ' ในชีตถูกเปลี่ยนไปแล้ว กรุณากดรีเฟรชแล้วบันทึกใหม่');
+  });
+  if (!expect || !('claimNo' in expect)) throw new Error('ต้องระบุเลขเคลมของแถว ' + row);
+  return r;
+}
+
 /**
- * แก้ไขแถวเดิม: items = [{row, expect:{claimNo}, patch:{key:value}}]
- * ตรวจว่าแถวในชีตยังเป็นเลขเคลมเดิมก่อนเขียน (กันเขียนผิดแถวเมื่อมีคนแทรก/ลบแถว)
+ * บันทึกหลายอย่างในครั้งเดียว (ทำทั้งหมดหรือไม่ทำเลย ถ้าตรวจไม่ผ่าน)
+ * b = {
+ *   updates: [{row, expect:{claimNo,...}, patch:{key:value}}],   แก้ไขช่องในแถวเดิม
+ *   inserts: {afterRow, afterExpect:{claimNo}, rows:[{key:value}]}, เพิ่มแถวต่อจากแถว afterRow (ไม่ระบุ = ต่อท้ายชีต)
+ *   deletes: [{row, expect:{claimNo, issSn,...}}]                ลบทั้งแถว (เก็บค่าเดิมไว้ในประวัติ)
+ * }
  */
-function updateRows(items) {
+function saveBatch(b) {
+  b = b || {};
+  const updates = b.updates || [], deletes = b.deletes || [], ins = b.inserts || null;
+  const insRows = ins && ins.rows ? ins.rows : [];
+  if (insRows.length > 300) throw new Error('เพิ่มได้ครั้งละไม่เกิน 300 แถว');
   const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  lock.waitLock(30000);
   try {
-    const sh = sheet_(), who = Session.getActiveUser().getEmail() || '', now = new Date();
-    const cur = items.map(function (it) {
-      if (!(it.row >= CONFIG.DATA_START_ROW)) throw new Error('เลขแถวไม่ถูกต้อง');
-      const r = sh.getRange(it.row, 1, 1, NCOL).getDisplayValues()[0];
-      if (String(r[5]).trim() !== String(it.expect && it.expect.claimNo || '').trim())
-        throw new Error('แถว ' + it.row + ' ในชีตถูกเปลี่ยนไปแล้ว กรุณากดรีเฟรชแล้วบันทึกใหม่');
-      return r;
-    });
-    const logs = [];
-    items.forEach(function (it, i) {
-      Object.keys(it.patch || {}).forEach(function (k) {
+    const sh = sheet_(), who = Session.getActiveUser().getEmail() || '', now = new Date(), logs = [];
+    // 1) ตรวจทุกแถวก่อน ยังไม่เขียนอะไร
+    const cur = updates.map(function (u) { return check_(sh, u.row, u.expect); });
+    const del = deletes.map(function (d) { return { row: d.row, vals: check_(sh, d.row, d.expect) }; });
+    let after = null;
+    if (insRows.length && ins.afterRow) { check_(sh, ins.afterRow, ins.afterExpect); after = ins.afterRow; }
+    if (after !== null && del.some(function (d) { return d.row > after; })) throw new Error('ตำแหน่งเพิ่มแถวไม่ถูกต้อง กรุณากดรีเฟรช');
+    // 2) แก้ไขช่อง (ไม่ทำให้เลขแถวเลื่อน)
+    updates.forEach(function (u, i) {
+      Object.keys(u.patch || {}).forEach(function (k) {
         const j = COLS.indexOf(k);
         if (j < 0) return;
-        const nv = String(it.patch[k] == null ? '' : it.patch[k]).trim();
+        const nv = String(u.patch[k] == null ? '' : u.patch[k]).trim();
         if (nv === String(cur[i][j]).trim()) return;
-        sh.getRange(it.row, j + 1).setValue(toCell_(k, nv));
-        logs.push([now, who, it.row, String(cur[i][5]).trim(), LABELS[j], cur[i][j], nv]);
+        sh.getRange(u.row, j + 1).setValue(toCell_(k, nv));
+        logs.push([now, who, u.row, String(cur[i][5]).trim(), LABELS[j], cur[i][j], nv]);
       });
+    });
+    // 3) เพิ่มแถว ต่อจากแถวสุดท้ายของเคลม (อยู่ใต้แถวที่จะลบทั้งหมด จึงไม่กระทบเลขแถวที่ลบ)
+    let firstRow = null;
+    if (insRows.length) {
+      const vals = insRows.map(function (o) { return COLS.map(function (k) { return toCell_(k, o[k]); }); });
+      if (after !== null) { sh.insertRowsAfter(after, vals.length); firstRow = after + 1; }
+      else firstRow = Math.max(sh.getLastRow() + 1, CONFIG.DATA_START_ROW);
+      sh.getRange(firstRow, 1, vals.length, NCOL).setValues(vals);
+      insRows.forEach(function (o, i) { logs.push([now, who, firstRow + i, String(o.claimNo || ''), 'เพิ่มแถวใหม่', '', String(o.pcode || '')]); });
+    }
+    // 4) ลบแถว จากล่างขึ้นบน
+    del.sort(function (a, c) { return c.row - a.row; }).forEach(function (d) {
+      sh.deleteRow(d.row);
+      logs.push([now, who, d.row, String(d.vals[5]).trim(), 'ลบแถว', JSON.stringify(d.vals), '']);
     });
     log_(logs);
     if (logs.length) bump_();
-    return { changed: logs.length };
+    return { changed: logs.length, firstRow: firstRow };
   } finally { lock.releaseLock(); }
 }
 
+/** แก้ไขแถวเดิม: items = [{row, expect:{claimNo}, patch:{key:value}}] */
+function updateRows(items) { return saveBatch({ updates: items }); }
+
 /** เพิ่มแถวใหม่ต่อท้ายชีต: list = [{key:value}] */
-function addRows(list) {
-  if (!list || !list.length) return { added: 0 };
-  if (list.length > 200) throw new Error('เพิ่มได้ครั้งละไม่เกิน 200 แถว');
-  const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    const sh = sheet_(), who = Session.getActiveUser().getEmail() || '', now = new Date();
-    const at = Math.max(sh.getLastRow() + 1, CONFIG.DATA_START_ROW);
-    const vals = list.map(function (o) { return COLS.map(function (k) { return toCell_(k, o[k]); }); });
-    sh.getRange(at, 1, vals.length, NCOL).setValues(vals);
-    log_(list.map(function (o, i) { return [now, who, at + i, String(o.claimNo || ''), 'เพิ่มแถวใหม่', '', String(o.pcode || '')]; }));
-    bump_();
-    return { added: vals.length, firstRow: at };
-  } finally { lock.releaseLock(); }
-}
+function addRows(list) { return saveBatch({ inserts: { rows: list } }); }
+
+/** ลบแถว: items = [{row, expect:{claimNo, issSn}}] */
+function deleteRows(items) { return saveBatch({ deletes: items }); }
