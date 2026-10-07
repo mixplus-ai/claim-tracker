@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="th"><head><base target="_top"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ระบบติดตามงานเคลม SSC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Chakra+Petch:wght@600;700&display=swap">
+<style>
+/* Layout: work-desk app. Sticky search bar on top, claim list on the left, claim dossier on the right; stacks on phones. */
+:root{
+  --bg:#f3f5f4; --surface:#ffffff; --sunk:#e8ecea; --line:#d5dbd8; --fg:#17201d; --muted:#5d6a65;
+  --accent:#d9861a; --accent-ink:#ffffff; --accent-soft:#fbefdc;
+  --ok:#1f7a4d; --ok-soft:#e1f2e8; --warn:#9a6a00; --warn-soft:#fff3c4; --bad:#c2352b; --bad-soft:#fde4e1; --info:#36598f; --info-soft:#e3ebf7;
+  --s1:#36598f; --s2:#1f7a6e; --s3:#b8501c; --s4:#6b4bb0; --s5:#59656b;
+  --f-display:"Chakra Petch","IBM Plex Sans Thai",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans Thai",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111715; --surface:#18201d; --sunk:#202a27; --line:#2f3b37; --fg:#e4ebe8; --muted:#97a6a0;
+  --accent:#eba344; --accent-ink:#1a1206; --accent-soft:#3a2a12;
+  --ok:#5cc58f; --ok-soft:#173327; --warn:#e8c25a; --warn-soft:#3a3013; --bad:#ff7c70; --bad-soft:#41201d; --info:#8fb1e6; --info-soft:#1d2a3e;
+  --s1:#8fb1e6; --s2:#5cc5b6; --s3:#f08c5a; --s4:#b59cf0; --s5:#a9b4b8; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111715; --surface:#18201d; --sunk:#202a27; --line:#2f3b37; --fg:#e4ebe8; --muted:#97a6a0;
+  --accent:#eba344; --accent-ink:#1a1206; --accent-soft:#3a2a12;
+  --ok:#5cc58f; --ok-soft:#173327; --warn:#e8c25a; --warn-soft:#3a3013; --bad:#ff7c70; --bad-soft:#41201d; --info:#8fb1e6; --info-soft:#1d2a3e;
+  --s1:#8fb1e6; --s2:#5cc5b6; --s3:#f08c5a; --s4:#b59cf0; --s5:#a9b4b8; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.5}
+button,input,select,textarea{font:inherit;color:inherit}
+.mono{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+header.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand h1{font-family:var(--f-display);font-size:20px;margin:0;letter-spacing:.02em}
+.brand span{color:var(--muted);font-size:12px}
+.search{flex:1 1 320px;display:flex;gap:8px;min-width:0}
+.search input{flex:1;min-width:0;padding:9px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg)}
+.search select{padding:9px 8px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);max-width:42%}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--surface);padding:8px 12px;border-radius:var(--r);cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.btn.sm{padding:4px 9px;font-size:12.5px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.notice{margin:12px 16px 0;padding:8px 12px;border-radius:var(--r);background:var(--info-soft);color:var(--info);font-size:13px}
+.notice.bad{background:var(--bad-soft);color:var(--bad)}
+.summary{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px 0}
+.sum{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:8px 12px;display:flex;gap:8px;align-items:baseline;cursor:pointer}
+.sum b{font-family:var(--f-display);font-size:20px;font-variant-numeric:tabular-nums}
+.sum.on{border-color:var(--accent);background:var(--accent-soft)}
+main{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:16px;padding:12px 16px 32px;align-items:start}
+@media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-width:0}
+.list .head{padding:8px 12px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
+.items{max-height:calc(100vh - 210px);overflow:auto}
+@media (max-width:860px){.items{max-height:46vh}}
+.item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:10px 12px;cursor:pointer}
+.item:hover{background:var(--sunk)}
+.item.sel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.item .r1{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.item .cno{font-family:var(--f-mono);font-weight:500;font-size:14px}
+.item .co{color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .hit{font-size:11.5px;color:var(--accent)}
+.pips{display:flex;gap:3px;margin-top:6px}
+.pip{flex:1;height:6px;border-radius:3px;background:var(--sunk)}
+.pip.ok{background:var(--ok)} .pip.part{background:var(--warn)} .pip.over{background:var(--bad)} .pip.info{background:var(--s5)}
+.empty{padding:28px 16px;color:var(--muted);text-align:center}
+.detail{min-width:0;display:grid;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;min-width:0}
+.dhead{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:flex-start}
+.dhead h2{font-family:var(--f-display);font-size:26px;margin:0;letter-spacing:.02em}
+.dhead .sub{color:var(--muted)}
+.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 16px;margin-top:12px}
+.kv div{min-width:0}
+.kv small{display:block;color:var(--muted);font-size:11.5px;letter-spacing:.03em}
+.kv span{overflow-wrap:anywhere}
+.flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+@media (max-width:640px){.flow{grid-template-columns:minmax(0,1fr)}}
+.stage{border:1px solid var(--line);border-radius:var(--r);padding:10px;border-top:4px solid var(--sc);min-width:0}
+.stage .n{font-family:var(--f-display);color:var(--sc);font-size:13px}
+.stage .t{font-weight:600;font-size:13px;line-height:1.35}
+.stage .dir{font-family:var(--f-mono);font-size:11.5px;color:var(--muted)}
+.chip{display:inline-flex;gap:4px;align-items:center;font-size:12px;padding:2px 8px;border-radius:999px;margin-top:6px;font-variant-numeric:tabular-nums;font-weight:500}
+.chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.part{background:var(--warn-soft);color:var(--warn)} .chip.over{background:var(--bad-soft);color:var(--bad)} .chip.none{background:var(--sunk);color:var(--muted)} .chip.info{background:var(--sunk);color:var(--fg)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r)}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;vertical-align:top}
+thead th{background:var(--sunk);font-weight:600;font-size:12px;position:sticky;top:0}
+thead tr.g th{color:var(--accent-ink);font-weight:600}
+td.sn{font-family:var(--f-mono)}
+tr.warnrow td{background:var(--warn-soft)}
+td.miss{color:var(--muted)}
+.flag{color:var(--bad);font-size:11.5px;display:block;white-space:normal;max-width:220px}
+.audit{color:var(--muted);font-size:12px}
+dialog{border:1px solid var(--line);border-radius:12px;padding:0;background:var(--surface);color:var(--fg);width:min(860px,calc(100vw - 32px));max-height:calc(100vh - 48px)}
+dialog::backdrop{background:rgba(10,15,13,.45)}
+.dlg{display:flex;flex-direction:column;max-height:calc(100vh - 50px)}
+.dlg header{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.dlg header h3{margin:0;font-family:var(--f-display);font-size:18px}
+.dlg .body{padding:14px 16px;overflow:auto;display:grid;gap:14px}
+.dlg footer{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+fieldset{border:1px solid var(--line);border-left:4px solid var(--sc);border-radius:var(--r);padding:10px 12px;margin:0;min-width:0}
+legend{font-weight:600;font-size:13px;padding:0 6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+label.f{display:grid;gap:3px;font-size:12px;color:var(--muted);min-width:0}
+label.f input,label.f textarea{color:var(--fg);padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);min-width:0;width:100%}
+label.f input.err{border-color:var(--bad)}
+.hint{font-size:12px;color:var(--muted)}
+.errtxt{color:var(--bad);font-size:12.5px}
+.drop{border:2px dashed var(--line);border-radius:var(--r);padding:18px;text-align:center;color:var(--muted)}
+.progress{height:6px;background:var(--sunk);border-radius:3px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--accent);width:0}
+.toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:13px;z-index:20}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.auditgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.acat{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--surface);text-align:left;cursor:pointer;border-left:4px solid var(--sev)}
+.acat.on{background:var(--accent-soft);border-color:var(--accent)}
+.acat b{font-family:var(--f-display);font-size:22px;font-variant-numeric:tabular-nums;display:block}
+.acat span{font-size:12.5px}
+.acat small{display:block;color:var(--muted);font-size:11.5px}
+a.cl{color:var(--accent);font-family:var(--f-mono);cursor:pointer;text-decoration:underline}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head><body>
+
+<header class="bar">
+  <div class="brand"><h1>CLAIM TRACKER</h1><span>SSC · SolarEdge</span></div>
+  <div class="search">
+    <select id="scope" aria-label="ค้นหาจาก">
+      <option value="all">ทุกช่อง</option>
+      <option value="claimNo">เลขเคลม</option>
+      <option value="pcode">รหัสสินค้า</option>
+      <option value="sn">SN (ทุกขั้นตอน)</option>
+      <option value="doc">เลขใบสำคัญ / เลขที่เบิก</option>
+      <option value="caseId">Case ID</option>
+      <option value="company">ชื่อบริษัท</option>
+    </select>
+    <input id="q" type="search" placeholder="พิมพ์เลขเคลม เช่น 23-0312, รหัสสินค้า, SN, Case ID…" autocomplete="off">
+  </div>
+  <div class="actions">
+    <button class="btn primary" id="btnNew" type="button">+ เปิดใบเคลมใหม่</button>
+    <button class="btn" id="btnAudit" type="button">รายงานตรวจสอบ</button>
+    <button class="btn" id="btnRefresh" type="button">รีเฟรช</button>
+    <button class="btn" id="btnExport" type="button">ส่งออก CSV</button>
+  </div>
+</header>
+<div id="notice" class="notice" hidden></div>
+<div class="summary" id="summary"></div>
+<main>
+  <section class="list" aria-label="รายการเคลม">
+    <div class="head"><span id="listCount">กำลังโหลด…</span><span>เรียงตามเลขเคลม</span></div>
+    <div class="items" id="items"><div class="empty">กำลังดึงข้อมูลจาก Google Sheet…</div></div>
+  </section>
+  <section class="detail" id="detail">
+    <div class="card empty">เลือกเลขเคลมทางซ้ายเพื่อดูรายละเอียดทั้ง 5 ขั้นตอน</div>
+  </section>
+</main>
+
+<dialog id="dlgRow"><form class="dlg" id="formRow" method="dialog">
+  <header><h3 id="rowTitle">แก้ไขรายการ</h3><button class="btn sm" type="button" data-close>ปิด</button></header>
+  <div class="body" id="rowBody"></div>
+  <footer>
+    <span class="errtxt" id="rowErr" style="margin-right:auto"></span>
+    <button class="btn danger" type="button" id="rowDelete">ลบรายการนี้</button>
+    <button class="btn" type="button" data-close>ยกเลิก</button>
+    <button class="btn primary" type="submit" id="rowSave">บันทึก</button>
+  </footer>
+</form></dialog>
+
+
+
+<script>
+(function(){
+"use strict";
+const STAGES=[
+ {k:1,t:"รายละเอียดในใบเคลมสินค้างานเคลม",dir:"ลูกค้า >> SSC",sub:"รายละเอียดใบเคลม",c:"--s1",
+  f:[["pcode","รหัสสินค้า","A"],["vno","เลขใบสำคัญ","B"],["vdate","วันที่ใบสำคัญ","C","date"],["caseId","Case ID","D"],["refId","เลขอ้างอิง (คอลัมน์ E)","E"],["claimNo","เลขเคลม","F"],["company","ชื่อบริษัท","G"],["pickup","วันนัดรับ","H"],["wh","รหัส (คอลัมน์ I)","I"],["qty","จำนวน","J","num"]]},
+ {k:2,t:"ส่วนรายละเอียดในการเบิกสินค้างานเคลม",dir:"SSC >> ลูกค้า",sub:"รายการรับจาก SIAM SOLAR",c:"--s2",sn:"issSn",
+  f:[["issDoc","เลขที่เบิก MAC5","K"],["issDate","วันที่เบิก","L","date"],["issSn","SN เบิก","M"]]},
+ {k:3,t:"ส่วนของการคืนสินค้างานเคลม",dir:"SSC >> SolarEdge",sub:"รายการคืนของเสีย ของดีเคลมให้ SIAM",c:"--s3",sn:"retSn",
+  f:[["retPcode","รหัสสินค้า","N"],["retDoc","เลขที่เบิก","O"],["retDate","วันที่","P","date"],["retSn","SN คืน","Q"],["retNote","หมายเหตุ","R"]]},
+ {k:4,t:"ส่วนการรับของเคลมกับ SolarEdge",dir:"SolarEdge << SSC",sub:"รายการรับจาก AWOT",c:"--s4",sn:"rcvSn",
+  f:[["rcvPcode","รหัสสินค้า","S"],["rcvDoc","เลขที่เบิก","T"],["rcvDate","วันที่","U","date"],["rcvSn","SN รับ","V"]]},
+ {k:5,t:"รายการส่วนที่ตรวจสอบเเล้วไม่เสีย",dir:"SolarEdge << SSC",sub:"รายการคืนของเสียให้ AWOT",c:"--s5",sn:"okSn",optional:true,
+  f:[["okPcode","รหัสสินค้า","W"],["okDoc","เลขที่เบิก","X"],["okDate","วันที่","Y","date"],["okSn","SN จ่าย","Z"]]}
+];
+const COLS=STAGES.flatMap(s=>s.f.map(x=>x[0]));          // A..Z order, 26 fields
+const HEADER_FIELDS=STAGES[0].f.map(x=>x[0]).filter(k=>k!=="pcode"); // shared by every unit of a claim
+const $=s=>document.querySelector(s);
+const COLL=new Intl.Collator("th",{numeric:true});
+const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const norm=v=>String(v==null?"":v).trim();
+const low=v=>norm(v).toLowerCase();
+
+let user=null,canWrite=true,lastRev=null,loadedAt=null,me="";
+const run=(fn,...a)=>new Promise((res,rej)=>google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...a));
+const downloads={save:({filename,data})=>{const u=URL.createObjectURL(new Blob([data],{type:"text/csv;charset=utf-8"}));const a=document.createElement("a");a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);return Promise.resolve({status:"saved"})}};
+let rows=[];            // [{id, ...fields}]
+let claims=new Map();   // claimNo -> {no, rows, qty, st:[...]}
+let selected=null, filter="all", editing=null;
+
+function store(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}}
+function toast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2600)}
+function notice(msg,bad){const n=$("#notice");n.hidden=!msg;n.textContent=msg||"";n.classList.toggle("bad",!!bad)}
+
+/* dd/mm/yyyy <-> yyyy-mm-dd */
+function toISO(d){const m=norm(d).match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);return m?`${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`:""}
+function fromISO(s){const m=norm(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?`${m[3]}/${m[2]}/${m[1]}`:norm(s)}
+
+/* ---------- status logic ---------- */
+function stageState(count,qty,optional){
+  if(optional) return count?{cls:"info",label:`${count} รายการ`}:{cls:"none",label:"ไม่มีรายการ"};
+  if(!count) return {cls:"none",label:`0/${qty}`,txt:"ยังไม่เริ่ม"};
+  if(count<qty) return {cls:"part",label:`${count}/${qty}`,txt:"ยังไม่ครบ"};
+  if(count>qty) return {cls:"over",label:`${count}/${qty}`,txt:"เกินจำนวน"};
+  return {cls:"ok",label:`${count}/${qty}`,txt:"ครบ"};
+}
+function rowFlags(r){
+  const f=[];
+  if(r.okSn&&r.retSn&&!isNote(r.okSn)&&low(r.okSn)!==low(r.retSn)) f.push(snKey(r.okSn)===snKey(r.retSn)?"SN จ่าย/คืน ต่างกันเล็กน้อย (พิมพ์ผิด?)":"SN จ่าย ไม่ตรงกับ SN คืน");
+  for(const [k,l] of SNF) if(norm(r[k])&&isNote(r[k])) f.push(`${l} เป็นข้อความ: ${norm(r[k])}`);
+  if(r.rcvSn&&!r.issSn) f.push("มี SN รับ แต่ยังไม่มี SN เบิก");
+  if(r.retSn&&!r.issSn) f.push("มี SN คืน แต่ยังไม่มี SN เบิก");
+  for(const s of STAGES.slice(1)){const d=s.f.find(x=>x[3]==="date");if(d&&r[d[0]]&&!toISO(r[d[0]])) f.push(`วันที่ขั้นตอน ${s.k} ไม่อยู่ในรูปแบบ วว/ดด/ปปปป`)}
+  return f;
+}
+function rebuild(){
+  claims=new Map();
+  for(const r of rows){const no=norm(r.claimNo)||"(ไม่มีเลขเคลม)";if(!claims.has(no))claims.set(no,{no,rows:[]});claims.get(no).rows.push(r)}
+  for(const c of claims.values()){
+    c.rows.sort((a,b)=>(a.seq||0)-(b.seq||0));
+    const h=c.rows[0];
+    c.head=h;
+    c.qty=Math.max(...c.rows.map(r=>parseInt(r.qty,10)||0))||c.rows.length;
+    c.st=STAGES.map(s=>{
+      const cnt=s.k===1?c.rows.length:c.rows.filter(r=>norm(r[s.sn])).length;
+      return stageState(cnt,c.qty,s.optional);
+    });
+    c.flags=c.rows.reduce((n,r)=>n+rowFlags(r).length,0);
+    const req=c.st.slice(0,4);
+    c.done=req.every(x=>x.cls==="ok");
+    c.problem=req.some(x=>x.cls==="over")||c.flags>0;
+    const dup=new Set();c.dupSn=[];
+    for(const r of c.rows){const s=low(r.issSn);if(s){if(dup.has(s))c.dupSn.push(r.issSn);dup.add(s)}}
+    if(c.dupSn.length)c.problem=true;
+  }
+}
+
+/* ---------- full audit ---------- */
+const NOTE_RE=/[\u0E00-\u0E7F]|^(no\s*sn|none|n\/a|-+)$/i;
+const isNote=v=>NOTE_RE.test(norm(v));
+const snKey=v=>norm(v).toUpperCase().replace(/\s+/g,"").replace(/O/g,"0");
+const SNF=[["issSn","SN เบิก"],["retSn","SN คืน"],["rcvSn","SN รับ"],["okSn","SN จ่าย"]];
+const ACATS=[
+ {id:"noClaim",t:"ไม่มีเลขเคลม",d:"แถวที่มีข้อมูลแต่ช่องเลขเคลม (F) ว่าง",sev:"--bad"},
+ {id:"noVoucher",t:"ไม่มีเลขใบสำคัญ",d:"มีเลขเคลมแต่ไม่มีเลขใบสำคัญ (B)",sev:"--warn"},
+ {id:"noIss",t:"ยังไม่มี SN เบิก",d:"ขั้นตอน 2 ยังไม่ได้บันทึก",sev:"--warn"},
+ {id:"notRet",t:"เบิกแล้ว ยังไม่คืน",d:"มี SN เบิก แต่ไม่มี SN คืน (ขั้นตอน 3)",sev:"--warn"},
+ {id:"notRcv",t:"คืนแล้ว ยังไม่ได้รับ",d:"มี SN คืน แต่ไม่มี SN รับ (ขั้นตอน 4)",sev:"--warn"},
+ {id:"skip",t:"ข้ามขั้นตอน",d:"มี SN คืน/รับ แต่ไม่มี SN เบิก",sev:"--bad"},
+ {id:"dup",t:"SN ซ้ำ",d:"SN เดียวกันถูกบันทึกมากกว่า 1 แถวในขั้นตอนเดียวกัน",sev:"--bad"},
+ {id:"zq",t:"SN จ่าย ไม่ตรงกับ SN คืน",d:"SN จ่าย (Z) ไม่พบใน SN คืนของเคลมนี้",sev:"--bad"},
+ {id:"typo",t:"SN น่าจะพิมพ์ผิด",d:"ตรงกันเมื่อตัดช่องว่าง หรือแทน O ด้วย 0",sev:"--warn"},
+ {id:"swap",t:"SN จ่ายสลับแถว",d:"SN จ่ายตรงกับ SN คืนของอีกแถวในเคลมเดียวกัน",sev:"--info"},
+ {id:"note",t:"ช่อง SN เป็นข้อความ",d:"เช่น “ไม่มี SN”, “SN จางหาย”, “เบิกตรง SolarEdge”",sev:"--info"},
+ {id:"space",t:"SN มีช่องว่างเกิน",d:"มีช่องว่างหน้า/หลัง/กลาง SN",sev:"--info"},
+ {id:"qty",t:"จำนวนแถวไม่ตรงกับจำนวนในใบเคลม",d:"จำนวนหน่วยที่บันทึก ≠ จำนวน (J)",sev:"--warn"},
+ {id:"date",t:"วันที่ผิดรูปแบบ",d:"ไม่อยู่ในรูปแบบ วว/ดด/ปปปป",sev:"--info"}
+];
+let auditCache=null,auditCat=null,auditOn=false;
+function runAudit(){
+  const out=[],add=(cat,r,detail)=>out.push({cat,claim:norm(r.claimNo),seq:r.seq||0,id:r.id,detail});
+  const seen={};SNF.forEach(([k])=>seen[k]=new Map());
+  for(const r of rows){
+    const has=k=>norm(r[k])&&!isNote(r[k]);
+    if(!norm(r.claimNo)){add("noClaim",r,`${norm(r.pcode)} ${norm(r.vno)} ${norm(r.issSn)}`.trim());continue}
+    if(!norm(r.vno))add("noVoucher",r,`${norm(r.pcode)||"-"}`);
+    if(!norm(r.issSn))add("noIss",r,`${norm(r.pcode)||"-"}`);
+    else if(!norm(r.retSn))add("notRet",r,`SN เบิก ${norm(r.issSn)}`);
+    if(norm(r.retSn)&&!norm(r.rcvSn))add("notRcv",r,`SN คืน ${norm(r.retSn)}`);
+    if((norm(r.retSn)||norm(r.rcvSn))&&!norm(r.issSn))add("skip",r,`SN คืน ${norm(r.retSn)||"-"} · SN รับ ${norm(r.rcvSn)||"-"}`);
+    for(const [k,l] of SNF){const raw=String(r[k]==null?"":r[k]);if(!norm(raw))continue;
+      if(isNote(raw)){add("note",r,`${l}: ${norm(raw)}`);continue}
+      if(raw!==raw.trim()||/\s/.test(raw.trim()))add("space",r,`${l}: “${raw}”`);
+      const key=snKey(raw);if(!seen[k].has(key))seen[k].set(key,[]);seen[k].get(key).push(r)}
+    for(const s of STAGES.slice(1)){const d=s.f.find(x=>x[3]==="date");if(d&&norm(r[d[0]])&&!toISO(r[d[0]]))add("date",r,`ขั้นตอน ${s.k}: ${norm(r[d[0]])}`)}
+  }
+  for(const [k,l] of SNF)for(const [key,list] of seen[k])if(list.length>1){
+    const cl=[...new Set(list.map(x=>norm(x.claimNo)))];
+    for(const r of list)add("dup",r,`${l} ${norm(r[k])} ซ้ำ ${list.length} แถว (เคลม ${cl.join(", ")})`)}
+  for(const c of claims.values()){
+    if(c.no==="(ไม่มีเลขเคลม)")continue;
+    const qs=new Map(c.rows.filter(r=>norm(r.retSn)).map(r=>[norm(r.retSn).toUpperCase(),r]));
+    const qk=new Set(c.rows.filter(r=>norm(r.retSn)).map(r=>snKey(r.retSn)));
+    for(const r of c.rows){const z=norm(r.okSn);if(!z||isNote(z))continue;
+      const q=norm(r.retSn);
+      if(q&&q.toUpperCase()===z.toUpperCase())continue;
+      if(q&&snKey(q)===snKey(z)){add("typo",r,`SN คืน ${q} · SN จ่าย ${z}`);continue}
+      if(qs.has(z.toUpperCase())){add("swap",r,`SN จ่าย ${z} อยู่ในแถว SN คืนอื่นของเคลมนี้`);continue}
+      if(qk.has(snKey(z))){add("typo",r,`SN จ่าย ${z} คล้าย SN คืนอื่นในเคลมนี้`);continue}
+      add("zq",r,`SN คืน ${q||"(ว่าง)"} · SN จ่าย ${z}`)}
+    const q=Math.max(...c.rows.map(r=>parseInt(r.qty,10)||0));
+    if(q&&q!==c.rows.length)add("qty",c.rows[0],`บันทึก ${c.rows.length} หน่วย · ใบเคลมระบุ ${q}`);
+  }
+  out.sort((a,b)=>COLL.compare(a.claim,b.claim)||a.seq-b.seq);
+  return out;
+}
+function renderAudit(){
+  const box=$("#detail");
+  if(!auditCache)auditCache=runAudit();
+  const by={};ACATS.forEach(c=>by[c.id]=[]);auditCache.forEach(x=>by[x.cat].push(x));
+  const cl=new Set(auditCache.filter(x=>!["note","space","swap"].includes(x.cat)).map(x=>x.claim));
+  const cat=auditCat&&by[auditCat]?auditCat:null,list=cat?by[cat]:[];
+  box.innerHTML=`<div class="card">
+    <div class="dhead"><div><div class="sub">ตรวจทุกเลขเคลม · ${rows.length} แถว · ${claims.size} เลขเคลม</div><h2>รายงานตรวจสอบข้อมูล</h2>
+    <div class="sub">${cl.size} เลขเคลมมีจุดที่ต้องตรวจ · ${claims.size-cl.size} เลขเคลมไม่พบปัญหา</div></div>
+    <div class="actions"><button class="btn" type="button" id="aExport">ส่งออกรายงาน CSV</button><button class="btn" type="button" id="aClose">กลับไปหน้าเคลม</button></div></div></div>
+  <div class="auditgrid">${ACATS.map(c=>`<button type="button" class="acat${cat===c.id?" on":""}" data-cat="${c.id}" style="--sev:var(${c.sev})"><b>${by[c.id].length}</b><span>${esc(c.t)}</span><small>${esc(c.d)}</small></button>`).join("")}</div>
+  ${cat?`<div class="card" style="padding:0"><div class="tablewrap" style="border:0;max-height:60vh"><table><thead><tr><th>เลขเคลม</th><th>รายละเอียด</th></tr></thead><tbody>${list.slice(0,1000).map(x=>`<tr><td>${x.claim?`<a class="cl" data-open="${esc(x.claim)}">${esc(x.claim)}</a>`:"–"}</td><td style="white-space:normal">${esc(x.detail)}</td></tr>`).join("")}</tbody></table></div>${list.length>1000?`<p class="hint" style="padding:0 12px">แสดง 1,000 รายการแรก ส่งออก CSV เพื่อดูทั้งหมด</p>`:""}</div>`:`<p class="hint">เลือกหัวข้อด้านบนเพื่อดูรายการเลขเคลม</p>`}`;
+  box.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{auditCat=b.dataset.cat;renderAudit()});
+  box.querySelectorAll("[data-open]").forEach(a=>a.onclick=()=>{auditOn=false;selected=a.dataset.open;$("#q").value="";renderList();renderDetail()});
+  $("#aClose").onclick=()=>{auditOn=false;renderDetail()};
+  $("#aExport").onclick=async()=>{
+    if(!downloads){toast("หน้านี้ส่งออกไฟล์ไม่ได้ในมุมมองนี้");return}
+    const t=Object.fromEntries(ACATS.map(c=>[c.id,c.t]));
+    const csv="\uFEFF"+[["เลขเคลม","หัวข้อ","รายละเอียด"],...auditCache.map(x=>[x.claim,t[x.cat],x.detail])].map(r=>r.map(csvCell).join(",")).join("\r\n");
+    try{await downloads.save({filename:`claim-audit-${new Date().toISOString().slice(0,10)}.csv`,data:csv})}catch(e){if(e&&e.code!=="declined")toast("ส่งออกไม่สำเร็จ")}
+  };
+}
+
+/* ---------- search ---------- */
+const SCOPES={claimNo:["claimNo"],pcode:["pcode","retPcode","rcvPcode","okPcode"],sn:["issSn","retSn","rcvSn","okSn"],doc:["vno","issDoc","retDoc","rcvDoc","okDoc"],caseId:["caseId","refId"],company:["company"]};
+const LABEL=Object.fromEntries(STAGES.flatMap(s=>s.f.map(x=>[x[0],x[1]])));
+function match(c,q,scope){
+  if(!q) return {ok:true};
+  const keys=scope==="all"?COLS:SCOPES[scope];
+  for(const r of c.rows)for(const k of keys){const v=low(r[k]);if(v&&v.includes(q))return {ok:true,hit:k==="claimNo"?"":`${LABEL[k]}: ${norm(r[k])}`}}
+  return {ok:false};
+}
+function visibleClaims(){
+  const q=low($("#q").value),scope=$("#scope").value,out=[];
+  for(const c of claims.values()){
+    if(filter==="done"&&!c.done)continue;
+    if(filter==="open"&&c.done)continue;
+    if(filter==="problem"&&!c.problem)continue;
+    const m=match(c,q,scope);if(m.ok)out.push({c,hit:m.hit});
+  }
+  return out.sort((a,b)=>COLL.compare(a.c.no,b.c.no));
+}
+
+/* ---------- render ---------- */
+function renderSummary(){
+  const all=[...claims.values()];
+  const n={all:all.length,open:all.filter(c=>!c.done).length,done:all.filter(c=>c.done).length,problem:all.filter(c=>c.problem).length};
+  const lab={all:"เคลมทั้งหมด",open:"กำลังดำเนินการ",done:"ปิดครบ 4 ขั้นตอน",problem:"ต้องตรวจสอบ"};
+  $("#summary").innerHTML=Object.keys(lab).map(k=>`<button type="button" class="sum${filter===k?" on":""}" data-f="${k}"><b>${n[k]}</b><span>${lab[k]}</span></button>`).join("")+
+   `<span class="sum" style="cursor:default"><b>${rows.length}</b><span>รายการ (หน่วยสินค้า)</span></span>`;
+}
+function renderList(){
+  const v=visibleClaims(),box=$("#items");
+  $("#listCount").textContent=`${v.length} เลขเคลม`+(loadedAt?` · ข้อมูล ณ ${loadedAt.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"})}`:"");
+  if(!claims.size){box.innerHTML=`<div class="empty">ยังไม่มีงานเคลม<br>กด <b>+ เปิดใบเคลมใหม่</b> หรือ <b>นำเข้า CSV</b> จาก Google Sheet</div>`;return}
+  if(!v.length){box.innerHTML=`<div class="empty">ไม่พบเคลมที่ตรงกับ “${esc($("#q").value)}”</div>`;return}
+  box.innerHTML=v.slice(0,400).map(({c,hit})=>`<button type="button" class="item${selected===c.no?" sel":""}" data-no="${esc(c.no)}">
+    <div class="r1"><span class="cno">${esc(c.no)}</span><span class="mono" style="color:var(--muted)">${esc(c.head.pcode)}</span></div>
+    <div class="co">${esc(c.head.company)||"&nbsp;"}</div>
+    ${hit?`<div class="hit">${esc(hit)}</div>`:""}
+    <div class="pips" aria-label="สถานะ 5 ขั้นตอน">${c.st.map((s,i)=>`<span class="pip ${s.cls}" title="ขั้นตอน ${i+1}: ${esc(s.label)}"></span>`).join("")}</div>
+  </button>`).join("")+(v.length>400?`<div class="empty">แสดง 400 รายการแรก พิมพ์ค้นหาเพื่อจำกัดผล</div>`:"");
+}
+function cell(r,k){const v=norm(r[k]);return v?esc(v):`<span class="miss">–</span>`}
+function renderDetail(){
+  if(auditOn)return renderAudit();
+  const box=$("#detail"),c=selected&&claims.get(selected);
+  if(!c){box.innerHTML=`<div class="card empty">${claims.size?"เลือกเลขเคลมทางซ้ายเพื่อดูรายละเอียดทั้ง 5 ขั้นตอน":"เมื่อมีข้อมูลแล้ว รายละเอียดของแต่ละเลขเคลมจะแสดงที่นี่"}</div>`;return}
+  const h=c.head;
+  const last=c.rows.reduce((a,r)=>(r.updatedAt||0)>(a.updatedAt||0)?r:a,c.rows[0]);
+  box.innerHTML=`
+  <div class="card">
+    <div class="dhead">
+      <div><div class="sub">เลขเคลม</div><h2 class="mono" style="font-size:26px">${esc(c.no)}</h2><div class="sub">${esc(h.company)}</div></div>
+      <div class="actions">
+        <button class="btn" type="button" id="dEditHead">แก้ไขข้อมูลใบเคลม</button>
+        <button class="btn primary" type="button" id="dAddUnit">+ เพิ่มหน่วยสินค้า</button>
+      </div>
+    </div>
+    <div class="kv">${STAGES[0].f.filter(x=>x[0]!=="claimNo"&&x[0]!=="company").map(([k,l])=>`<div><small>${esc(l)}</small><span class="${/pcode|vno|caseId|refId/.test(k)?"mono":""}">${cell(h,k)}</span></div>`).join("")}</div>
+    ${c.dupSn.length?`<p class="errtxt">SN เบิกซ้ำในเคลมนี้: ${c.dupSn.map(esc).join(", ")}</p>`:""}
+    ${last&&last.updatedAt?`<p class="audit" id="audit">แก้ไขล่าสุด ${new Date(last.updatedAt).toLocaleString("th-TH")}<span data-uid="${esc(last.updatedBy||"")}"></span></p>`:""}
+  </div>
+  <div class="flow">${STAGES.map((s,i)=>{const st=c.st[i];return `<div class="stage" style="--sc:var(${s.c})">
+    <div class="n">ขั้นตอน ${s.k}</div><div class="t">${esc(s.t)}</div><div class="dir">${esc(s.dir)}</div>
+    <span class="chip ${st.cls}">${esc(st.label)}${st.txt?` · ${esc(st.txt)}`:""}</span></div>`}).join("")}</div>
+  <div class="card" style="padding:0">
+    <div class="tablewrap" style="border:0">
+    <table>
+      <thead>
+        <tr class="g"><th rowspan="2">#</th>${STAGES.map(s=>`<th colspan="${s.k===1?1:s.f.length}" style="background:var(${s.c})">${s.k}. ${esc(s.sub)}</th>`).join("")}<th rowspan="2">ตรวจสอบ</th><th rowspan="2"></th></tr>
+        <tr><th>รหัสสินค้า</th>${STAGES.slice(1).map(s=>s.f.map(x=>`<th>${esc(x[1])}</th>`).join("")).join("")}</tr>
+      </thead>
+      <tbody>${c.rows.map((r,i)=>{const fl=rowFlags(r);return `<tr class="${fl.length?"warnrow":""}">
+        <td class="mono">${i+1}</td><td class="sn">${cell(r,"pcode")}</td>
+        ${STAGES.slice(1).map(s=>s.f.map(([k])=>`<td class="${/Sn|Pcode|Doc/.test(k)?"sn":""}">${cell(r,k)}</td>`).join("")).join("")}
+        <td>${fl.length?fl.map(x=>`<span class="flag">${esc(x)}</span>`).join(""):`<span class="chip ok" style="margin:0">ผ่าน</span>`}</td>
+        <td><button class="btn sm" type="button" data-edit="${esc(r.id)}">บันทึก/แก้ไข</button></td></tr>`}).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="legend"><span><i style="background:var(--ok)"></i>ครบตามจำนวน</span><span><i style="background:var(--warn)"></i>ยังไม่ครบ</span><span><i style="background:var(--bad)"></i>เกินจำนวน / ข้อมูลไม่ตรง</span><span><i style="background:var(--s5)"></i>ขั้นตอน 5 นับเฉพาะรายการที่มี</span></div>`;
+  $("#dEditHead").onclick=()=>openRow(c.rows[0],"head");
+  $("#dAddUnit").onclick=()=>openRow({...pick(h,HEADER_FIELDS),pcode:h.pcode},"add");
+  box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openRow(rows.find(r=>r.id===b.dataset.edit),"edit"));
+  resolveAudit();
+}
+async function resolveAudit(){
+  const sp=document.querySelector("#audit [data-uid]");if(!sp||!sp.dataset.uid||!user||!user.profiles)return;
+  try{const ps=await user.profiles([sp.dataset.uid]);const nm=ps&&ps[sp.dataset.uid]&&ps[sp.dataset.uid].name;if(nm)sp.textContent=" โดย "+nm}catch(e){}
+}
+function pick(o,keys){const r={};for(const k of keys)r[k]=o[k]==null?"":o[k];return r}
+function renderAll(){rebuild();auditCache=null;if(selected&&!claims.has(selected))selected=null;renderSummary();renderList();renderDetail()}
+
+/* ---------- edit dialog ---------- */
+function fieldHTML([k,l,col,type],v,ro){
+  const val=type==="date"?toISO(v)||"":norm(v);
+  const t=type==="date"&&(toISO(v)||!norm(v))?"date":type==="num"?"number":"text";
+  return `<label class="f">${esc(l)} <span class="mono" style="font-size:10.5px">[${col}]</span><input id="f_${k}" name="${k}" type="${t}" value="${esc(val)}" ${t==="number"?'min="1" step="1"':""} ${ro?"readonly":""} ${k==="claimNo"?'required pattern=".*\\S.*"':""}></label>`;
+}
+function openRow(r,mode){
+  if(canWrite===false){toast("บัญชีนี้ดูได้อย่างเดียว");return}
+  editing={r,mode};
+  $("#rowErr").textContent="";
+  $("#rowDelete").hidden=true;
+  $("#rowTitle").textContent=mode==="new"?"เปิดใบเคลมใหม่":mode==="head"?`แก้ไขข้อมูลใบเคลม ${r.claimNo}`:mode==="add"?`เพิ่มหน่วยสินค้าในเคลม ${r.claimNo}`:`บันทึกขั้นตอน · เคลม ${r.claimNo}`;
+  const stages=mode==="head"||mode==="new"?[STAGES[0]]:STAGES;
+  $("#rowBody").innerHTML=(mode==="new"?`<p class="hint" style="margin:0">ระบบจะสร้างแถวตาม “จำนวน” ให้อัตโนมัติ (1 แถว = 1 หน่วยสินค้า เหมือนในชีต) แล้วบันทึกขั้นตอน 2–5 ทีละหน่วยภายหลัง</p>`:"")+
+   (mode==="head"?`<p class="hint" style="margin:0">ข้อมูลใบเคลมจะถูกแก้ในทุกหน่วยของเคลมนี้ (${claims.get(r.claimNo)?.rows.length||1} แถว)</p>`:"")+
+   stages.map(s=>`<fieldset style="--sc:var(${s.c})"><legend>${s.k}. ${esc(s.t)} <span class="mono" style="font-weight:400;color:var(--muted)">${esc(s.dir)}</span></legend>
+     <div class="grid">${s.f.map(x=>fieldHTML(x,r[x[0]],(mode==="add"||mode==="edit")&&s.k===1&&x[0]!=="pcode")).join("")}</div>
+     ${s.k>1?`<div style="margin-top:8px"><button class="btn sm" type="button" data-today="${s.f.find(x=>x[3]==="date")[0]}">ใส่วันที่วันนี้</button></div>`:""}</fieldset>`).join("");
+  $("#rowBody").querySelectorAll("[data-today]").forEach(b=>b.onclick=()=>{const i=$("#f_"+b.dataset.today);const d=new Date();i.type="date";i.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`});
+  $("#dlgRow").showModal();
+}
+function readForm(){
+  const o={};
+  $("#rowBody").querySelectorAll("input").forEach(i=>{o[i.name]=i.type==="date"?fromISO(i.value):i.type==="number"?(i.value?String(parseInt(i.value,10)):""):norm(i.value)});
+  return o;
+}
+function validate(o,mode){
+  const errs=[];
+  if("claimNo" in o&&!o.claimNo)errs.push("ต้องกรอกเลขเคลม");
+  if(mode==="new"&&claims.has(o.claimNo))errs.push(`เลขเคลม ${o.claimNo} มีอยู่แล้ว ให้เปิดเคลมนั้นแล้วกด “เพิ่มหน่วยสินค้า”`);
+  if(mode==="new"&&!(parseInt(o.qty,10)>0))errs.push("จำนวนต้องมากกว่า 0");
+  if(mode==="new"&&parseInt(o.qty,10)>200)errs.push("จำนวนต่อเคลมต้องไม่เกิน 200");
+  const snKeys=["issSn","retSn","rcvSn","okSn"];
+  for(const k of snKeys){if(!o[k]||(editing.r&&low(o[k])===low(editing.r[k])))continue;const dup=rows.find(r=>r.id!==(editing.r&&editing.r.id)&&low(r[k])===low(o[k]));if(dup)errs.push(`${LABEL[k]} ${o[k]} ถูกบันทึกแล้วในเคลม ${dup.claimNo}`)}
+  return errs;
+}
+async function stamp(o){return o}
+$("#formRow").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const {r,mode}=editing,o=readForm(),errs=validate(o,mode);
+  if(errs.length){$("#rowErr").textContent=errs.join(" · ");return}
+  $("#rowSave").disabled=true;$("#rowSave").textContent="กำลังบันทึกลงชีต…";
+  try{
+    if(mode==="new"){
+      const n=parseInt(o.qty,10);
+      await run("addRows",Array.from({length:n},()=>({...o})));
+      selected=o.claimNo;toast(`เปิดเคลม ${o.claimNo} แล้ว (${n} แถวในชีต)`);
+    }else if(mode==="head"){
+      const c=claims.get(r.claimNo),hdr=pick(o,HEADER_FIELDS);
+      await run("updateRows",c.rows.map(x=>({row:x.row,expect:{claimNo:x.claimNo},patch:x===c.rows[0]?{...hdr,pcode:o.pcode}:hdr})));
+      selected=o.claimNo;toast("บันทึกข้อมูลใบเคลมลงชีตแล้ว");
+    }else if(mode==="add"){
+      await run("addRows",[{...pick(r,HEADER_FIELDS),...o}]);toast("เพิ่มแถวในชีตแล้ว");
+    }else{
+      const patch={};for(const k of Object.keys(o))if(norm(o[k])!==norm(r[k]))patch[k]=o[k];
+      if(Object.keys(patch).length){await run("updateRows",[{row:r.row,expect:{claimNo:r.claimNo},patch}]);toast(`บันทึกลงชีตแถว ${r.row} แล้ว`)}
+    }
+    $("#dlgRow").close();
+    await load(true);
+  }catch(err){$("#rowErr").textContent=writeErr(err)}
+  finally{$("#rowSave").disabled=false;$("#rowSave").textContent="บันทึก"}
+});
+let delArmed=false;
+$("#rowDelete").onclick=async()=>{
+  if(!delArmed){delArmed=true;$("#rowDelete").textContent="กดอีกครั้งเพื่อยืนยันการลบ";setTimeout(()=>{delArmed=false;$("#rowDelete").textContent="ลบรายการนี้"},4000);return}
+  delArmed=false;$("#rowDelete").textContent="ลบรายการนี้";
+  try{throw new Error("ลบแถวได้จากใน Google Sheet เท่านั้น")}catch(err){$("#rowErr").textContent=writeErr(err)}
+};
+function blank(){const o={};for(const k of COLS)o[k]="";return o}
+function nextSeq(){return rows.reduce((m,r)=>Math.max(m,r.seq||0),0)+1}
+function writeErr(e){
+  if(e&&e.message&&!e.code)return "บันทึกไม่สำเร็จ: "+e.message;
+  const c=e&&e.code;
+  if(c==="invalid_argument"||c==="permission_denied"){canWrite=false;return "บัญชีนี้ไม่มีสิทธิ์แก้ไข ขอสิทธิ์ Contributor หรือ Editor จากเจ้าของ"}
+  if(c==="quota_exceeded")return "ฐานข้อมูลเต็ม (สูงสุด 25,000 แถว)";
+  return "บันทึกไม่สำเร็จ: "+((e&&e.message)||"ลองอีกครั้ง");
+}
+
+/* ---------- export ---------- */
+function csvCell(v){v=String(v==null?"":v);return /[",\n\r]/.test(v)?`"${v.replace(/"/g,'""')}"`:v}
+$("#btnExport").onclick=async()=>{
+  if(!downloads){toast("หน้านี้ส่งออกไฟล์ไม่ได้ในมุมมองนี้");return}
+  const r3=new Array(26).fill(""),r4=new Array(26).fill(""),r5=[];
+  let i=0;for(const s of STAGES){r3[i]=`${s.t} ${s.dir}`;r4[i]=s.sub;for(const x of s.f)r5.push(x[1]);i+=s.f.length}
+  const body=[...claims.values()].sort((a,b)=>COLL.compare(a.no,b.no)).flatMap(c=>c.rows).map(r=>COLS.map(k=>r[k]));
+  const csv="﻿"+[r3,r4,r5,...body].map(r=>r.map(csvCell).join(",")).join("\r\n");
+  try{await downloads.save({filename:`claims-${new Date().toISOString().slice(0,10)}.csv`,data:csv});}
+  catch(e){if(e&&e.code!=="declined")toast("ส่งออกไม่สำเร็จ")}
+};
+
+/* ---------- wiring ---------- */
+document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>b.closest("dialog").close());
+$("#btnNew").onclick=()=>openRow({...blank(),qty:"1"},"new");
+$("#btnAudit").onclick=()=>{auditOn=true;renderDetail();if(window.innerWidth<860)$("#detail").scrollIntoView({behavior:"smooth"})};
+$("#items").addEventListener("click",e=>{const b=e.target.closest(".item");if(!b)return;auditOn=false;selected=b.dataset.no;store("claim.sel",selected);renderList();renderDetail();if(window.innerWidth<860)$("#detail").scrollIntoView({behavior:"smooth"})});
+$("#summary").addEventListener("click",e=>{const b=e.target.closest("[data-f]");if(!b)return;filter=b.dataset.f;renderSummary();renderList()});
+let qt;$("#q").addEventListener("input",()=>{clearTimeout(qt);qt=setTimeout(()=>{renderList();const v=visibleClaims();if(v.length===1){selected=v[0].c.no;renderList();renderDetail()}},150)});
+$("#scope").addEventListener("change",renderList);
+selected=store("claim.sel")||null;
+
+function fromSheet(d){
+  const out=[];
+  d.values.forEach((v,i)=>{if(!v||!v.length)return;const row=d.start+i,o={id:"r"+row,row,seq:row};COLS.forEach((k,j)=>o[k]=v[j]==null?"":String(v[j]));out.push(o)});
+  return out;
+}
+let loading=false;
+async function load(force){
+  if(loading)return;loading=true;
+  try{
+    if(!force&&lastRev){const rev=await run("getRev");if(rev===lastRev)return}
+    const d=await run("getData");
+    rows=fromSheet(d);lastRev=d.rev;me=d.user||me;loadedAt=new Date();
+    notice("");renderAll();
+  }catch(e){notice("โหลดข้อมูลจากชีตไม่สำเร็จ: "+((e&&e.message)||"ลองกดรีเฟรช"),true)}
+  finally{loading=false;stampTime()}
+}
+function stampTime(){if(loadedAt)$("#listCount").textContent=`${visibleClaims().length} เลขเคลม · ข้อมูล ณ ${loadedAt.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}`}
+$("#btnRefresh").onclick=()=>{toast("กำลังดึงข้อมูลล่าสุดจากชีต…");load(true)};
+setInterval(()=>{if(document.visibilityState==="visible"&&!document.querySelector("dialog[open]"))load(false)},20000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")load(false)});
+load(true);
+})();
+</script>
+
+</body></html>
