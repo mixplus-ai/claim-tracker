@@ -4,7 +4,8 @@
  * วางไฟล์นี้ใน ส่วนขยาย › Apps Script ของชีตงานเคลม
  */
 const CONFIG = {
-  SHEET_NAME: '',          // เว้นว่าง = ใช้ชีตแรก หรือใส่ชื่อแท็บ เช่น 'Sheet1'
+  SHEET_GID: 200224574,    // gid ของแท็บฐานข้อมูล (ตัวเลขหลัง #gid= ในลิงก์ชีต)
+  SHEET_NAME: '',          // ใช้เมื่อไม่ได้ใส่ SHEET_GID: ชื่อแท็บ เช่น 'Sheet1' (ว่าง = แท็บแรก)
   DATA_START_ROW: 6,       // แถวแรกของข้อมูล (แถว 1–5 เป็นหัวตาราง)
   LOG_SHEET: 'ประวัติแก้ไข' // ชีตเก็บประวัติการแก้ไขจาก Web app
 };
@@ -25,8 +26,14 @@ function doGet() {
 
 function sheet_() {
   const ss = SpreadsheetApp.getActive();
-  const sh = CONFIG.SHEET_NAME ? ss.getSheetByName(CONFIG.SHEET_NAME) : ss.getSheets()[0];
-  if (!sh) throw new Error('ไม่พบแท็บชื่อ "' + CONFIG.SHEET_NAME + '"');
+  let sh = null;
+  if (CONFIG.SHEET_GID !== '' && CONFIG.SHEET_GID != null) {
+    sh = ss.getSheets().filter(function (x) { return x.getSheetId() === Number(CONFIG.SHEET_GID); })[0];
+    if (!sh) throw new Error('ไม่พบแท็บ gid=' + CONFIG.SHEET_GID + ' ในไฟล์นี้ ตรวจว่า Apps Script ผูกกับชีตงานเคลมถูกไฟล์');
+  } else {
+    sh = CONFIG.SHEET_NAME ? ss.getSheetByName(CONFIG.SHEET_NAME) : ss.getSheets()[0];
+    if (!sh) throw new Error('ไม่พบแท็บชื่อ "' + CONFIG.SHEET_NAME + '"');
+  }
   return sh;
 }
 
