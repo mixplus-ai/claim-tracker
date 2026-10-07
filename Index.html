@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="th"><head><base target="_top"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ระบบติดตามงานเคลม SSC</title>
+<script>
+/* แสดงข้อผิดพลาดของหน้าเว็บให้เห็น (ทำงานก่อนสคริปต์หลัก) */
+window.addEventListener("error",function(e){var m="เกิดข้อผิดพลาดในหน้าเว็บ: "+(e.message||"")+(e.lineno?" (บรรทัด "+e.lineno+")":"")+" ตรวจว่าวาง Index.html ครบทั้งไฟล์";
+  function show(){var n=document.getElementById("notice");if(n){n.hidden=false;n.className="notice bad";n.textContent=m}else alert(m)}
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",show);else show()});
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Chakra+Petch:wght@600;700&display=swap">
 <style>
@@ -240,7 +246,7 @@ body.ro .w{display:none!important}
 </head><body class="ro">
 
 <header class="bar">
-  <div class="brand"><h1>CLAIM TRACKER</h1><span>SSC · SolarEdge</span><span class="role" id="roleBadge">กำลังตรวจสิทธิ์…</span><button class="btn sm" type="button" id="btnLogin" hidden>เข้าสู่ระบบ Admin</button></div>
+  <div class="brand"><h1>CLAIM TRACKER</h1><span>SSC · SolarEdge · v2026.10.07-3</span><span class="role" id="roleBadge">ผู้ดู · อ่านอย่างเดียว</span><button class="btn sm" type="button" id="btnLogin">เข้าสู่ระบบ Admin</button></div>
   <div class="search">
     <select id="scope" aria-label="ค้นหาจาก">
       <option value="all">ทุกช่อง</option>
@@ -1201,7 +1207,6 @@ function fromSheet(d){
   return out;
 }
 let loading=false,slowT=0,roleKnown=false;
-window.addEventListener("error",e=>notice("เกิดข้อผิดพลาดในหน้าเว็บ: "+(e.message||"")+" (ตรวจว่าวางโค้ด Index.html ครบทั้งไฟล์)",true));
 run("whoami",authTok).then(r=>{if(!roleKnown){if(authTok&&r.role!=="admin"){authTok="";sess("claim.tok",null)}setRole(r.role,r.admin)}})
   .catch(e=>{if(!roleKnown)setRole("viewer","");notice("ตรวจสิทธิ์ไม่สำเร็จ: "+((e&&e.message)||"")+" ตรวจว่าวาง Code.gs เวอร์ชันล่าสุดและทำให้ใช้งานได้เป็นเวอร์ชันใหม่แล้ว",true)});
 async function load(force){
