@@ -4,6 +4,7 @@
  * วางไฟล์นี้ใน ส่วนขยาย › Apps Script ของชีตงานเคลม
  */
 const CONFIG = {
+  SPREADSHEET_ID: '1P_bzAam7-MREtOz1Lw6gEPzryMVzSJOy8_Ly0zehui8', // ID ของไฟล์ชีตงานเคลม (อยู่ในลิงก์ระหว่าง /d/ กับ /edit)
   SHEET_GID: 200224574,    // gid ของแท็บฐานข้อมูล (ตัวเลขหลัง #gid= ในลิงก์ชีต)
   SHEET_NAME: '',          // ใช้เมื่อไม่ได้ใส่ SHEET_GID: ชื่อแท็บ เช่น 'Sheet1' (ว่าง = แท็บแรก)
   DATA_START_ROW: 6,       // แถวแรกของข้อมูล (แถว 1–5 เป็นหัวตาราง)
@@ -24,8 +25,16 @@ function doGet() {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
-function sheet_() {
+/** เปิดไฟล์ชีตจาก ID เสมอ ใช้ได้ทั้งสคริปต์ที่สร้างจากในชีตและสร้างแยกที่ script.google.com */
+function ss_() {
+  if (CONFIG.SPREADSHEET_ID) return SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   const ss = SpreadsheetApp.getActive();
+  if (!ss) throw new Error('ไม่พบไฟล์ชีต ใส่ SPREADSHEET_ID ใน CONFIG');
+  return ss;
+}
+
+function sheet_() {
+  const ss = ss_();
   let sh = null;
   if (CONFIG.SHEET_GID !== '' && CONFIG.SHEET_GID != null) {
     sh = ss.getSheets().filter(function (x) { return x.getSheetId() === Number(CONFIG.SHEET_GID); })[0];
@@ -54,7 +63,9 @@ function getData() {
 /** เลขเวอร์ชันข้อมูล: เปลี่ยนทุกครั้งที่มีการแก้ไข (จาก Web app หรือแก้ในชีตเอง) */
 function getRev() {
   const p = PropertiesService.getScriptProperties().getProperty('rev') || '0';
-  return p + ':' + sheet_().getLastRow();
+  let edited = '';
+  try { edited = DriveApp.getFileById(ss_().getId()).getLastUpdated().getTime(); } catch (e) {}
+  return p + ':' + edited + ':' + sheet_().getLastRow();
 }
 function bump_() { PropertiesService.getScriptProperties().setProperty('rev', String(Date.now())); }
 /** simple trigger: แก้ในชีตโดยตรงก็ทำให้ Web app รีเฟรช */
@@ -73,7 +84,7 @@ function toCell_(key, v) {
 
 function log_(rows) {
   if (!rows.length) return;
-  const ss = SpreadsheetApp.getActive();
+  const ss = ss_();
   let lg = ss.getSheetByName(CONFIG.LOG_SHEET);
   if (!lg) {
     lg = ss.insertSheet(CONFIG.LOG_SHEET);
