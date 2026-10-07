@@ -246,7 +246,7 @@ body.ro .w{display:none!important}
 </head><body class="ro">
 
 <header class="bar">
-  <div class="brand"><h1>CLAIM TRACKER</h1><span>SSC · SolarEdge · v2026.10.07-3</span><span class="role" id="roleBadge">ผู้ดู · อ่านอย่างเดียว</span><button class="btn sm" type="button" id="btnLogin">เข้าสู่ระบบ Admin</button></div>
+  <div class="brand"><h1>CLAIM TRACKER</h1><span>SSC · SolarEdge · v2026.10.07-4</span><span class="role" id="roleBadge">ผู้ดู · อ่านอย่างเดียว</span><button class="btn sm" type="button" id="btnLogin">เข้าสู่ระบบ Admin</button></div>
   <div class="search">
     <select id="scope" aria-label="ค้นหาจาก">
       <option value="all">ทุกช่อง</option>
@@ -1054,7 +1054,9 @@ $("#formLogin").addEventListener("submit",async e=>{e.preventDefault();const go=
   catch(err){$("#lgErr").textContent=(err&&err.message)||"เข้าสู่ระบบไม่สำเร็จ"}finally{go.disabled=false}});
 
 /* ---------- claim printout: A4 landscape (print, PDF, PNG, XLSX) ---------- */
-const LIBS={h2c:"https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js",pdf:"https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js",xl:"https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"};
+/* Apps Script HtmlService breaks a JS string that contains a double slash, so the CDN address is assembled */
+const CDN=["https:","","cdn.jsdelivr.net","npm"].join("/")+"/";
+const LIBS={h2c:CDN+"html2canvas@1.4.1/dist/html2canvas.min.js",pdf:CDN+"jspdf@2.5.1/dist/jspdf.umd.min.js",xl:CDN+"exceljs@4.4.0/dist/exceljs.min.js"};
 const libP={};
 function lib(k){return libP[k]||(libP[k]=new Promise((res,rej)=>{const s=document.createElement("script");s.src=LIBS[k];s.onload=res;s.onerror=()=>{delete libP[k];s.remove();rej(new Error("โหลดไลบรารีไม่สำเร็จ ตรวจการเชื่อมต่ออินเทอร์เน็ต"))};document.head.appendChild(s)}))}
 function saveBlob(filename,blob){const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),8000)}
@@ -1160,7 +1162,7 @@ async function claimXlsx(c){
   ws.mergeCells(r,11,r,N);Object.assign(ws.getCell(r,11),{value:`เลขเคลม ${c.no}`,font:{name:F,size:16,bold:true},alignment:{horizontal:"right"}});
   r++;ws.mergeCells(r,1,r,N);Object.assign(ws.getCell(r,1),{value:`SSC · SolarEdge Warranty Claim · ${norm(c.head.company)} · พิมพ์เมื่อ ${new Date().toLocaleString("th-TH")}`,font:{name:F,size:9,color:{argb:"FF56635E"}}});
   r+=2;
-  // claim info: label/value pairs, 3 pairs per row (label 2 cols? keep: label col, value spans 4 cols)
+  /* claim info: 3 label/value pairs per row */
   const spans=[[1,2,3,5],[6,7,8,10],[11,12,13,15]];
   for(let i=0;i<d.info.length;i+=3){
     d.info.slice(i,i+3).forEach(([l,v],j)=>{const [a,b,c1,c2]=spans[j];ws.mergeCells(r,a,r,b);ws.mergeCells(r,c1,r,c2);
