@@ -1,18 +1,18 @@
 /**
- * ระบบติดตามงานเคลม SSC — Google Apps Script web app
- * อ่าน/เขียนข้อมูลจาก Google Sheet งานเคลมโดยตรง (ข้อมูลสดเสมอ)
- * วางไฟล์นี้ใน ส่วนขยาย › Apps Script ของชีตงานเคลม
+ * ระบบติดตามงานเคลม SSC — API (Google Apps Script)
+ * หน้าเว็บอยู่บน Netlify (โฟลเดอร์ web/ ใน repo) และเรียกใช้สคริปต์นี้เป็น API แบบ JSON
+ * สคริปต์อ่าน/เขียน Google Sheet งานเคลมโดยตรง (ข้อมูลสดเสมอ)
+ * ทำให้ใช้งานได้เป็น "เว็บแอป": เรียกใช้ในฐานะ = ฉัน, ผู้มีสิทธิ์เข้าถึง = ทุกคน
  */
+const API_VERSION = '2026.11.03-1';
 const CONFIG = {
   SPREADSHEET_ID: '1P_bzAam7-MREtOz1Lw6gEPzryMVzSJOy8_Ly0zehui8', // ID ของไฟล์ชีตงานเคลม (อยู่ในลิงก์ระหว่าง /d/ กับ /edit)
   SHEET_GID: 200224574,    // gid ของแท็บฐานข้อมูล (ตัวเลขหลัง #gid= ในลิงก์ชีต)
   SHEET_NAME: '',          // ใช้เมื่อไม่ได้ใส่ SHEET_GID: ชื่อแท็บ เช่น 'Sheet1' (ว่าง = แท็บแรก)
   DATA_START_ROW: 6,       // แถวแรกของข้อมูล (แถว 1–5 เป็นหัวตาราง)
   LOG_SHEET: 'ประวัติแก้ไข', // ชีตเก็บประวัติการแก้ไขจาก Web app
-  // Admin เข้าสู่ระบบด้วย ID และรหัสผ่าน (ตั้งค่าที่ฟังก์ชัน setupAdmins ด้านล่าง)
-  // ผู้ใช้ที่ไม่ได้เข้าสู่ระบบเป็น ผู้ดู (Viewer) ดูได้อย่างเดียว
-  ADMINS: [],              // (ไม่บังคับ) อีเมล Google ที่ให้เป็น Admin อัตโนมัติโดยไม่ต้องเข้าสู่ระบบ
-  SESSION_HOURS: 6         // อยู่ในระบบได้นานกี่ชั่วโมง (สูงสุด 6)
+  SESSION_HOURS: 6,        // Admin อยู่ในระบบได้นานกี่ชั่วโมง (สูงสุด 6)
+  VIEWER_DAYS: 30          // ผู้ดูที่ใส่รหัสผู้ดูแล้ว ไม่ต้องใส่ซ้ำกี่วัน (ใช้เมื่อเปิดรหัสผู้ดูด้วย setupViewer)
 };
 
 /**
@@ -26,6 +26,20 @@ function setupAdmins() {
   setAdmin_(1, 'admin1', 'ใส่รหัสผ่าน Admin 1');
   setAdmin_(2, 'admin2', 'ใส่รหัสผ่าน Admin 2');
 }
+
+/**
+ * (แนะนำ) ตั้งรหัสผู้ดู: เว็บบน Netlify เปิดได้จากทุกที่ ถ้าตั้งรหัสนี้ คนที่ไม่รู้รหัสจะดูข้อมูลไม่ได้
+ * ใส่รหัส (อย่างน้อย 6 ตัวอักษร) แล้วกด เรียกใช้ 1 ครั้ง จากนั้นลบรหัสออกจากโค้ดแล้วกดบันทึก
+ * เปลี่ยนรหัสเมื่อไร ทุกคนต้องใส่รหัสใหม่ ถ้าอยากยกเลิกรหัสผู้ดู ให้เรียกใช้ removeViewerPassword
+ */
+function setupViewer() {
+  setViewer_('ใส่รหัสผู้ดู');
+}
+function removeViewerPassword() {
+  PropertiesService.getScriptProperties().deleteProperty('viewer');
+  Logger.log('ยกเลิกรหัสผู้ดูแล้ว ทุกคนที่มีลิงก์เว็บดูข้อมูลได้');
+}
+
 const NCOL = 26; // คอลัมน์ A–Z
 const COLS = ['pcode','vno','vdate','caseId','refId','claimNo','company','pickup','wh','qty',
   'issDoc','issDate','issSn','retPcode','retDoc','retDate','retSn','retNote',
@@ -35,10 +49,42 @@ const LABELS = ['รหัสสินค้า','เลขใบสำคัญ
   'เลขที่เบิก MAC5','วันที่เบิก','SN เบิก','รหัสสินค้า (คืน)','เลขที่เบิก (คืน)','วันที่ (คืน)','SN คืน','หมายเหตุ',
   'รหัสสินค้า (รับ)','เลขที่เบิก (รับ)','วันที่ (รับ)','SN รับ','รหัสสินค้า (จ่าย)','เลขที่เบิก (จ่าย)','วันที่ (จ่าย)','SN จ่าย'];
 
-function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('ระบบติดตามงานเคลม SSC')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+/* ---------- API (JSON) ---------- */
+// pub = เรียกได้โดยไม่ต้องมีรหัสผู้ดู ที่เหลือต้องเป็นผู้ดูที่ผ่านรหัสแล้ว (ถ้าเปิดรหัสผู้ดู) หรือ Admin
+const API_ = {
+  ping:        { pub: true, run: function () { return { app: 'claim-tracker', version: API_VERSION }; } },
+  whoami:      { pub: true, run: function (a, c) { return whoami(c.token, c.vtoken); } },
+  login:       { pub: true, run: function (a) { return login(a[0], a[1]); } },
+  logout:      { pub: true, run: function (a, c) { return logout(c.token); } },
+  viewerLogin: { pub: true, run: function (a) { return viewerLogin(a[0]); } },
+  getRev:      { run: function () { return getRev(); } },
+  getData:     { run: function (a, c) { return getData(c.token); } },
+  saveBatch:   { run: function (a, c) { return saveBatch(a[0], c.token); } },
+  updateRows:  { run: function (a, c) { return updateRows(a[0], c.token); } },
+  addRows:     { run: function (a, c) { return addRows(a[0], c.token); } },
+  deleteRows:  { run: function (a, c) { return deleteRows(a[0], c.token); } },
+  writeSummary:{ run: function (a, c) { return writeSummary(a[0], c.token); } }
+};
+function json_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
+function apiErr_(code, msg) { const e = new Error(msg); e.code = code; return e; }
+/** เปิดลิงก์ /exec ในเบราว์เซอร์เพื่อทดสอบว่า API ทำงาน */
+function doGet() { return json_({ ok: true, data: API_.ping.run() }); }
+/** หน้าเว็บส่ง POST (Content-Type: text/plain) body = {fn, args, token, vtoken} */
+function doPost(e) {
+  try {
+    let body;
+    try { body = JSON.parse((e && e.postData && e.postData.contents) || '{}'); }
+    catch (x) { throw apiErr_('BAD_REQUEST', 'ข้อมูลที่ส่งมาไม่ถูกต้อง'); }
+    const api = Object.prototype.hasOwnProperty.call(API_, body.fn) ? API_[body.fn] : null;
+    if (!api) throw apiErr_('BAD_REQUEST', 'ไม่รู้จักคำสั่ง ' + body.fn + ' ตรวจว่าอัปเดต Code.gs เป็นเวอร์ชันล่าสุดแล้ว');
+    const ctx = { token: String(body.token || ''), vtoken: String(body.vtoken || '') };
+    if (!api.pub && !canRead_(ctx)) throw apiErr_('VIEWER_AUTH', 'ต้องใส่รหัสผู้ดูก่อนจึงจะดูข้อมูลได้');
+    return json_({ ok: true, data: api.run(Array.isArray(body.args) ? body.args : [], ctx) });
+  } catch (err) {
+    return json_({ ok: false, code: err.code || 'ERROR', error: String((err && err.message) || err) });
+  }
 }
 
 /** เปิดไฟล์ชีตจาก ID เสมอ ใช้ได้ทั้งสคริปต์ที่สร้างจากในชีตและสร้างแยกที่ script.google.com */
@@ -62,7 +108,7 @@ function sheet_() {
   return sh;
 }
 
-/* ---------- สิทธิ์ผู้ใช้: Admin (ID + รหัสผ่าน) / ผู้ดู ---------- */
+/* ---------- สิทธิ์ผู้ใช้: Admin (ID + รหัสผ่าน) / ผู้ดู (รหัสผู้ดู ไม่บังคับ) ---------- */
 function hash_(salt, pw) {
   let h = salt + '|' + pw;
   for (let i = 0; i < 500; i++) {
@@ -79,41 +125,73 @@ function setAdmin_(slot, id, pw) {
   PropertiesService.getScriptProperties().setProperty('admin_' + slot, JSON.stringify({ id: id, salt: salt, hash: hash_(salt, pw) }));
   Logger.log('ตั้งค่า Admin ' + slot + ' (ID: ' + id + ') เรียบร้อย');
 }
+function setViewer_(pw) {
+  pw = String(pw || '');
+  if (/^ใส่/.test(pw)) { Logger.log('ข้าม: ยังไม่ได้ใส่รหัสผู้ดู'); return; }
+  if (pw.length < 6) throw new Error('รหัสผู้ดูต้องยาวอย่างน้อย 6 ตัวอักษร');
+  const salt = Utilities.getUuid();
+  // secret ใหม่ทุกครั้ง: เปลี่ยนรหัสแล้วทุกเครื่องต้องใส่รหัสใหม่
+  PropertiesService.getScriptProperties().setProperty('viewer', JSON.stringify({ salt: salt, hash: hash_(salt, pw), secret: Utilities.getUuid() + Utilities.getUuid() }));
+  Logger.log('ตั้งรหัสผู้ดูเรียบร้อย');
+}
+function viewerCfg_() {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty('viewer') || 'null'); } catch (e) { return null; }
+}
+function sign_(secret, msg) {
+  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(msg, secret)).replace(/=+$/, '');
+}
 function admins_() {
   const p = PropertiesService.getScriptProperties();
   return [1, 2].map(function (n) { try { return JSON.parse(p.getProperty('admin_' + n) || 'null'); } catch (e) { return null; } }).filter(Boolean);
 }
+function tooMany_(key, limit) {
+  const cache = CacheService.getScriptCache(), fails = Number(cache.get(key) || 0);
+  if (fails >= (limit || 5)) throw new Error('ใส่รหัสผ่านผิดหลายครั้ง ลองใหม่อีกครั้งใน 15 นาที');
+  return function () { cache.put(key, String(fails + 1), 900); };
+}
 /** เข้าสู่ระบบ Admin: คืน token สำหรับใช้บันทึกข้อมูล */
 function login(id, pw) {
   id = String(id || '').trim();
-  const cache = CacheService.getScriptCache(), fk = 'fail_' + id.toLowerCase();
-  const fails = Number(cache.get(fk) || 0);
-  if (fails >= 5) throw new Error('ใส่รหัสผ่านผิดหลายครั้ง ลองใหม่อีกครั้งใน 15 นาที');
+  const fk = 'fail_' + id.toLowerCase(), fail = tooMany_(fk);
   const a = admins_().filter(function (x) { return x.id.toLowerCase() === id.toLowerCase(); })[0];
-  if (!a || hash_(a.salt, String(pw || '')) !== a.hash) {
-    cache.put(fk, String(fails + 1), 900);
-    throw new Error('ID หรือรหัสผ่านไม่ถูกต้อง');
-  }
+  if (!a || hash_(a.salt, String(pw || '')) !== a.hash) { fail(); throw new Error('ID หรือรหัสผ่านไม่ถูกต้อง'); }
+  const cache = CacheService.getScriptCache();
   cache.remove(fk);
   const token = Utilities.getUuid();
   cache.put('tok_' + token, a.id, Math.min(6, CONFIG.SESSION_HOURS || 6) * 3600);
   return { token: token, id: a.id, role: 'admin' };
 }
+/** ใส่รหัสผู้ดู: คืน token ผู้ดู (เก็บในเบราว์เซอร์ VIEWER_DAYS วัน) */
+function viewerLogin(pw) {
+  const v = viewerCfg_();
+  if (!v) return { vtoken: '', required: false };
+  // รหัสเดียวใช้ร่วมกันทุกคน จึงนับครั้งที่ผิดรวมกัน (ผิดเกิน 20 ครั้งใน 15 นาทีจะล็อกชั่วคราว)
+  const fail = tooMany_('fail_viewer', 20);
+  if (hash_(v.salt, String(pw || '')) !== v.hash) { fail(); throw new Error('รหัสผู้ดูไม่ถูกต้อง'); }
+  const exp = Date.now() + (CONFIG.VIEWER_DAYS || 30) * 86400000;
+  return { vtoken: exp + '.' + sign_(v.secret, 'v|' + exp), required: true };
+}
+function viewerOk_(vtoken) {
+  const v = viewerCfg_();
+  if (!v) return true;
+  const m = String(vtoken || '').match(/^(\d+)\.([\w-]+)$/);
+  return !!(m && Number(m[1]) > Date.now() && sign_(v.secret, 'v|' + m[1]) === m[2]);
+}
+function canRead_(c) { return !!adminOf_(c.token) || viewerOk_(c.vtoken); }
 /** ตรวจสิทธิ์อย่างเดียว (เร็ว ไม่อ่านชีต) */
-function whoami(token) { const id = adminOf_(token); return { role: id ? 'admin' : 'viewer', admin: id }; }
+function whoami(token, vtoken) {
+  const id = adminOf_(token);
+  return { role: id ? 'admin' : 'viewer', admin: id, viewerRequired: !!viewerCfg_(), canRead: !!id || viewerOk_(vtoken), api: API_VERSION };
+}
 function logout(token) { if (token) CacheService.getScriptCache().remove('tok_' + token); return true; }
-/** ผู้ใช้คนนี้เป็น Admin ไหม: คืนชื่อ Admin หรือ '' */
+/** token นี้เป็น Admin ไหม: คืน ID Admin หรือ '' */
 function adminOf_(token) {
-  if (token) { const id = CacheService.getScriptCache().get('tok_' + token); if (id) return id; }
-  const email = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase();
-  const list = (CONFIG.ADMINS || []).map(function (x) { return String(x || '').trim().toLowerCase(); }).filter(String);
-  return email && list.indexOf(email) >= 0 ? email : '';
+  return token ? (CacheService.getScriptCache().get('tok_' + token) || '') : '';
 }
 function requireAdmin_(token) {
   const id = adminOf_(token);
-  if (!id) throw new Error('ดูข้อมูลได้อย่างเดียว ต้องเข้าสู่ระบบ Admin ก่อนจึงจะเพิ่ม แก้ไข หรือลบได้ (หรือหมดเวลาเข้าสู่ระบบแล้ว)');
-  const email = Session.getActiveUser().getEmail() || '';
-  return email ? id + ' (' + email + ')' : id;
+  if (!id) throw apiErr_('ADMIN_AUTH', 'ดูข้อมูลได้อย่างเดียว ต้องเข้าสู่ระบบ Admin ก่อนจึงจะเพิ่ม แก้ไข หรือลบได้ (หรือหมดเวลาเข้าสู่ระบบแล้ว)');
+  return id;
 }
 
 /** ข้อมูลทั้งหมด: values[i] คือแถว start+i (แถวว่างส่งเป็น []) */
@@ -126,7 +204,6 @@ function getData(token) {
     start: CONFIG.DATA_START_ROW,
     values: vals.map(function (r) { return r.some(function (c) { return String(c).trim(); }) ? r : []; }),
     rev: getRev(),
-    user: Session.getActiveUser().getEmail() || '',
     role: adminOf_(token) ? 'admin' : 'viewer',
     admin: adminOf_(token)
   };

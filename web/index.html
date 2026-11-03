@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html lang="th"><head><base target="_top"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow"><meta name="referrer" content="no-referrer">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <title>ระบบติดตามงานเคลม SSC</title>
 <script>
 /* แสดงข้อผิดพลาดของหน้าเว็บให้เห็น (ทำงานก่อนสคริปต์หลัก) */
-window.addEventListener("error",function(e){var m="เกิดข้อผิดพลาดในหน้าเว็บ: "+(e.message||"")+(e.lineno?" (บรรทัด "+e.lineno+")":"")+" ตรวจว่าวาง Index.html ครบทั้งไฟล์";
+window.addEventListener("error",function(e){var m="เกิดข้อผิดพลาดในหน้าเว็บ: "+(e.message||"")+(e.lineno?" (บรรทัด "+e.lineno+")":"")+" ลองกดรีเฟรชหน้าเว็บ (Ctrl+F5)";
   function show(){var n=document.getElementById("notice");if(n){n.hidden=false;n.className="notice bad";n.textContent=m}else alert(m)}
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",show);else show()});
 </script>
@@ -243,10 +245,11 @@ body.ro .w{display:none!important}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
+<script src="config.js"></script>
 </head><body class="ro">
 
 <header class="bar">
-  <div class="brand"><h1>CLAIM TRACKER</h1><span>SSC · SolarEdge · v2026.10.07-5</span><span class="role" id="roleBadge">ผู้ดู · อ่านอย่างเดียว</span><button class="btn sm" type="button" id="btnLogin">เข้าสู่ระบบ Admin</button></div>
+  <div class="brand"><h1>CLAIM TRACKER</h1><span>SSC · SolarEdge · v2026.11.03-1</span><span class="role" id="roleBadge">ผู้ดู · อ่านอย่างเดียว</span><button class="btn sm" type="button" id="btnLogin">เข้าสู่ระบบ Admin</button></div>
   <div class="search">
     <select id="scope" aria-label="ค้นหาจาก">
       <option value="all">ทุกช่อง</option>
@@ -309,6 +312,15 @@ body.ro .w{display:none!important}
     <span class="errtxt" id="lgErr"></span>
   </div>
   <footer><button class="btn primary" type="submit" id="lgGo">เข้าสู่ระบบ</button></footer>
+</form></dialog>
+<dialog id="dlgViewer" style="width:min(380px,calc(100vw - 32px))"><form class="dlg" id="formViewer" method="dialog">
+  <header><h3>ใส่รหัสผู้ดู</h3></header>
+  <div class="body" style="padding:16px;display:grid;gap:10px">
+    <p style="margin:0;color:var(--muted)">ระบบนี้เปิดดูได้เฉพาะพนักงาน ใส่รหัสผู้ดูที่ได้รับจากผู้ดูแลระบบ เครื่องนี้จะจำรหัสไว้ 30 วัน</p>
+    <label class="f">รหัสผู้ดู<input id="vwPw" type="password" autocomplete="current-password" required></label>
+    <span class="errtxt" id="vwErr"></span>
+  </div>
+  <footer><button class="btn" type="button" id="vwAdmin" style="margin-right:auto">เข้าสู่ระบบ Admin</button><button class="btn primary" type="submit" id="vwGo">เข้าดูข้อมูล</button></footer>
 </form></dialog>
 <dialog id="dlgPrint"><div class="dlg">
   <header><h3 id="prTitle">พิมพ์ / ส่งออกใบเคลม</h3><div class="actions">
@@ -387,7 +399,24 @@ let user=null,canWrite=false,role="viewer",lastRev=null,loadedAt=null,me="";
 const WRITE_FNS=new Set(["saveBatch","updateRows","addRows","deleteRows","writeSummary"]);
 function sess(k,v){try{if(v===undefined)return sessionStorage.getItem(k);if(v===null)sessionStorage.removeItem(k);else sessionStorage.setItem(k,v)}catch(e){return null}}
 let authTok=sess("claim.tok")||"";
-const run=(fn,...a)=>new Promise((res,rej)=>{if(WRITE_FNS.has(fn))a=[...a,authTok];google.script.run.withSuccessHandler(res).withFailureHandler(e=>{if(WRITE_FNS.has(fn)&&/เข้าสู่ระบบ Admin/.test((e&&e.message)||""))setRole("viewer","");rej(e)})[fn](...a)});
+let viewTok=store("claim.vtok")||"";
+/* เรียก API (Google Apps Script) แบบ JSON: POST text/plain เพื่อไม่ให้เบราว์เซอร์ส่ง preflight */
+const API_URL=norm(window.CLAIM_CONFIG&&window.CLAIM_CONFIG.apiUrl);
+async function run(fn,...args){
+  if(!API_URL)throw Object.assign(new Error("ยังไม่ได้ตั้งค่าที่อยู่ API ให้ตั้งค่า CLAIM_API_URL ใน Netlify (Site configuration › Environment variables) แล้ว Deploy ใหม่"),{code:"NO_API"});
+  let r;
+  try{r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({fn,args,token:authTok,vtoken:viewTok}),redirect:"follow",cache:"no-store"})}
+  catch(e){throw new Error("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจอินเทอร์เน็ต หรือตรวจว่า Apps Script ตั้ง ผู้มีสิทธิ์เข้าถึง = ทุกคน")}
+  const t=await r.text();let j=null;try{j=JSON.parse(t)}catch(e){}
+  if(!j)throw new Error(`เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง (HTTP ${r.status}) ตรวจว่า CLAIM_API_URL เป็นลิงก์ที่ลงท้ายด้วย /exec`);
+  if(!j.ok){
+    if(j.code==="ADMIN_AUTH"&&authTok){authTok="";sess("claim.tok",null);setRole("viewer","")}
+    if(j.code==="VIEWER_AUTH"){viewTok="";store("claim.vtok","");askViewer()}
+    throw Object.assign(new Error(j.error||"เกิดข้อผิดพลาด"),{code:j.code});
+  }
+  return j.data;
+}
+function askViewer(){const d=$("#dlgViewer");if(d.open)return;document.querySelectorAll("dialog[open]").forEach(x=>x.close());$("#vwErr").textContent="";$("#vwPw").value="";d.showModal();$("#vwPw").focus()}
 const downloads={save:({filename,data})=>{const u=URL.createObjectURL(new Blob([data],{type:"text/csv;charset=utf-8"}));const a=document.createElement("a");a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);return Promise.resolve({status:"saved"})}};
 let rows=[];            // [{id, ...fields}]
 let claims=new Map();   // claimNo -> {no, rows, qty, st:[...]}
@@ -1050,12 +1079,18 @@ $("#btnLogin").onclick=async()=>{
   if(canWrite){if(!authTok)return;try{await run("logout",authTok)}catch(e){}authTok="";sess("claim.tok",null);setRole("viewer","");toast("ออกจากระบบแล้ว");return}
   $("#lgErr").textContent="";$("#lgPw").value="";$("#dlgLogin").showModal();$("#lgId").focus()};
 $("#formLogin").addEventListener("submit",async e=>{e.preventDefault();const go=$("#lgGo");go.disabled=true;$("#lgErr").textContent="";
-  try{const r=await run("login",norm($("#lgId").value),$("#lgPw").value);authTok=r.token;sess("claim.tok",authTok);$("#lgPw").value="";$("#dlgLogin").close();setRole("admin",r.id);toast(`เข้าสู่ระบบ Admin (${r.id}) แล้ว`)}
+  try{const r=await run("login",norm($("#lgId").value),$("#lgPw").value);authTok=r.token;sess("claim.tok",authTok);$("#lgPw").value="";$("#dlgLogin").close();setRole("admin",r.id);toast(`เข้าสู่ระบบ Admin (${r.id}) แล้ว`);if(!loadedAt)load(true)}
   catch(err){$("#lgErr").textContent=(err&&err.message)||"เข้าสู่ระบบไม่สำเร็จ"}finally{go.disabled=false}});
 
+$("#dlgViewer").addEventListener("cancel",e=>e.preventDefault());
+$("#vwAdmin").onclick=()=>{$("#dlgViewer").close();$("#lgErr").textContent="";$("#lgPw").value="";$("#dlgLogin").showModal();$("#lgId").focus()};
+$("#dlgLogin").addEventListener("close",()=>{if(!canWrite&&!viewTok&&needViewer)setTimeout(askViewer,0)});
+$("#formViewer").addEventListener("submit",async e=>{e.preventDefault();const go=$("#vwGo");go.disabled=true;$("#vwErr").textContent="";
+  try{const r=await run("viewerLogin",$("#vwPw").value);viewTok=r.vtoken||"";store("claim.vtok",viewTok);$("#vwPw").value="";$("#dlgViewer").close();load(true)}
+  catch(err){$("#vwErr").textContent=(err&&err.message)||"ไม่สำเร็จ"}finally{go.disabled=false}});
+
 /* ---------- claim printout: A4 landscape (print, PDF, PNG, XLSX) ---------- */
-/* Apps Script HtmlService breaks a JS string that contains a double slash, so the CDN address is assembled */
-const CDN=["https:","","cdn.jsdelivr.net","npm"].join("/")+"/";
+const CDN="https://cdn.jsdelivr.net/npm/";
 const LIBS={h2c:CDN+"html2canvas@1.4.1/dist/html2canvas.min.js",pdf:CDN+"jspdf@2.5.1/dist/jspdf.umd.min.js",xl:CDN+"exceljs@4.4.0/dist/exceljs.min.js"};
 const libP={};
 function lib(k){return libP[k]||(libP[k]=new Promise((res,rej)=>{const s=document.createElement("script");s.src=LIBS[k];s.onload=res;s.onerror=()=>{delete libP[k];s.remove();rej(new Error("โหลดไลบรารีไม่สำเร็จ ตรวจการเชื่อมต่ออินเทอร์เน็ต"))};document.head.appendChild(s)}))}
@@ -1208,24 +1243,25 @@ function fromSheet(d){
   d.values.forEach((v,i)=>{if(!v||!v.length)return;const row=d.start+i,o={id:"r"+row,row,seq:row};COLS.forEach((k,j)=>o[k]=v[j]==null?"":String(v[j]));out.push(o)});
   return out;
 }
-let loading=false,slowT=0,roleKnown=false;
-run("whoami",authTok).then(r=>{if(!roleKnown){if(authTok&&r.role!=="admin"){authTok="";sess("claim.tok",null)}setRole(r.role,r.admin)}})
-  .catch(e=>{if(!roleKnown)setRole("viewer","");notice("ตรวจสิทธิ์ไม่สำเร็จ: "+((e&&e.message)||"")+" ตรวจว่าวาง Code.gs เวอร์ชันล่าสุดและทำให้ใช้งานได้เป็นเวอร์ชันใหม่แล้ว",true)});
+let loading=false,slowT=0,roleKnown=false,needViewer=false;
+run("whoami").then(r=>{needViewer=!!r.viewerRequired;if(!roleKnown){if(authTok&&r.role!=="admin"){authTok="";sess("claim.tok",null)}setRole(r.role,r.admin)}if(r.canRead===false)askViewer()})
+  .catch(e=>{if(!roleKnown)setRole("viewer","");notice("ตรวจสิทธิ์ไม่สำเร็จ: "+((e&&e.message)||"")+(e&&e.code==="NO_API"?"":" ตรวจว่า Code.gs เป็นเวอร์ชันล่าสุดและทำให้ใช้งานได้เป็นเวอร์ชันใหม่แล้ว"),true)});
 async function load(force){
   if(loading)return;loading=true;
   try{
     if(!force&&lastRev){const rev=await run("getRev");if(rev===lastRev)return}
     clearTimeout(slowT);slowT=setTimeout(()=>notice("กำลังโหลดข้อมูลจากชีต ใช้เวลานานกว่าปกติ… ถ้าค้างนานให้กดรีเฟรช หรือเปิดลิงก์ Web app ใหม่"),25000);
-    const d=await run("getData",authTok);
-    rows=fromSheet(d);lastRev=d.rev;me=d.user||me;loadedAt=new Date();if(authTok&&d.role!=="admin"){authTok="";sess("claim.tok",null)}setRole(d.role,d.admin);
+    const d=await run("getData");
+    rows=fromSheet(d);lastRev=d.rev;loadedAt=new Date();if(authTok&&d.role!=="admin"){authTok="";sess("claim.tok",null)}setRole(d.role,d.admin);
     notice("");renderAll();
-  }catch(e){notice("โหลดข้อมูลจากชีตไม่สำเร็จ: "+((e&&e.message)||"ลองกดรีเฟรช"),true);if(!roleKnown)setRole("viewer","")}
+  }catch(e){if(e&&e.code==="VIEWER_AUTH"){needViewer=true;notice("ใส่รหัสผู้ดูเพื่อดูข้อมูล");return}
+    notice("โหลดข้อมูลจากชีตไม่สำเร็จ: "+((e&&e.message)||"ลองกดรีเฟรช"),true);if(!roleKnown)setRole("viewer","")}
   finally{loading=false;clearTimeout(slowT);stampTime()}
 }
 function stampTime(){if(loadedAt)$("#listCount").textContent=`${visibleClaims().length} เลขเคลม · ข้อมูล ณ ${loadedAt.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}`}
 $("#btnRefresh").onclick=()=>{toast("กำลังดึงข้อมูลล่าสุดจากชีต…");load(true)};
-setInterval(()=>{if(document.visibilityState==="visible"&&!document.querySelector("dialog[open]"))load(false)},20000);
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")load(false)});
+setInterval(()=>{if(document.visibilityState==="visible"&&!document.querySelector("dialog[open]")&&loadedAt)load(false)},20000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&loadedAt)load(false)});
 load(true);
 })();
 </script>
