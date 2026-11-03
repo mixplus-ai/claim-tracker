@@ -250,6 +250,19 @@ label.f input.err{border-color:var(--bad)}
 .bt input.dup{border-color:var(--bad);background:var(--bad-soft)}
 .bt tr.del td{opacity:.45;text-decoration:line-through}
 .bt tr.new td:first-child{color:var(--ok);font-weight:600}
+.bt tr.hit td{background:var(--ok-soft,rgba(31,122,110,.16));transition:background .2s}
+.bt tr.hitbad td{background:var(--bad-soft)}
+.bulk .tool.scan{border-color:var(--accent);background:var(--accent-soft)}
+.bulk .tool.scan #scanIn{font-family:var(--f-mono);font-size:15px;padding:9px 10px;border-width:2px;border-color:var(--accent);min-width:140px}
+.scanmsg{font-size:12.5px;min-height:1.4em;font-weight:500;color:var(--muted)}
+.scanmsg.ok{color:var(--ok)}.scanmsg.bad{color:var(--bad)}.scanmsg.warn{color:var(--warn)}
+.snin{display:flex;gap:4px;align-items:stretch}.snin input{flex:1;min-width:0}.snin .btn{padding:0 9px}
+#dlgScan{width:min(560px,calc(100vw - 16px))}
+#dlgScan .body{gap:10px}
+.scview{width:100%;min-height:220px;background:#0b1220;border-radius:10px;overflow:hidden}
+.scview video{width:100%!important;display:block}
+.sclist{margin:0;padding-left:22px;max-height:24vh;overflow:auto;font-family:var(--f-mono);font-size:12.5px;display:grid;gap:2px}
+.sclist li.ok{color:var(--ok)}.sclist li.bad{color:var(--bad)}
 .dg td{padding:3px 4px;vertical-align:middle}
 .dg input[type=text]{width:100%;min-width:118px;padding:5px 7px;border:1px solid var(--line2);border-radius:5px;background:var(--surface);font-family:var(--f-mono);font-size:12.5px}
 .dg input.dt{min-width:96px;width:100px}
@@ -419,7 +432,7 @@ body.ro .w{display:none!important}
 <header class="appbar">
   <div class="brand">
     <div class="logo" aria-hidden="true"><svg class="ic"><use href="#i-sun"/></svg></div>
-    <div><h1>ระบบติดตามงานเคลม<span class="ver">v2026.11.03-6</span></h1><span class="tag">SSC · SolarEdge Warranty Claim</span></div>
+    <div><h1>ระบบติดตามงานเคลม<span class="ver">v2026.11.03-7</span></h1><span class="tag">SSC · SolarEdge Warranty Claim</span></div>
   </div>
   <div class="userbox">
     <span class="role" id="roleBadge">ผู้ดู · อ่านอย่างเดียว</span>
@@ -574,6 +587,15 @@ body.ro .w{display:none!important}
     <button class="btn" type="button" data-close>ยกเลิก</button>
     <button class="btn primary" type="button" id="stSave">บันทึกลงชีต</button>
   </footer>
+</div></dialog>
+
+<dialog id="dlgScan"><div class="dlg">
+  <header><h3 id="scTitle">สแกน SN ด้วยกล้อง</h3><button class="btn sm" type="button" data-close>ปิดกล้อง</button></header>
+  <div class="body">
+    <div id="scView" class="scview"></div>
+    <div class="scanmsg" id="scMsg" aria-live="polite"></div>
+    <ol class="sclist" id="scList"></ol>
+  </div>
 </div></dialog>
 
 
@@ -885,7 +907,8 @@ function renderAll(){rebuild();renderYears();auditCache=null;dashCache=null;if($
 function fieldHTML([k,l,col,type],v,ro){
   const val=type==="date"?toISO(v)||"":norm(v);
   const t=type==="date"&&(toISO(v)||!norm(v))?"date":type==="num"?"number":"text";
-  return `<label class="f">${esc(l)} <span class="mono" style="font-size:10.5px">[${col}]</span><input id="f_${k}" name="${k}" type="${t}" value="${esc(val)}" ${t==="number"?'min="1" step="1"':""} ${ro?"readonly":""} ${k==="claimNo"?'required pattern=".*\\S.*"':""}></label>`;
+  const inp=`<input id="f_${k}" name="${k}" type="${t}" value="${esc(val)}" ${t==="number"?'min="1" step="1"':""} ${ro?"readonly":""} ${k==="claimNo"?'required pattern=".*\\S.*"':""} ${SN_KEYS.includes(k)?'autocomplete="off" spellcheck="false" enterkeyhint="next"':""}>`;
+  return `<label class="f">${esc(l)} <span class="mono" style="font-size:10.5px">[${col}]</span>${SN_KEYS.includes(k)&&!ro?`<span class="snin">${inp}<button class="btn sm" type="button" data-cam="${k}" title="สแกน ${esc(l)} ด้วยกล้อง" aria-label="สแกน ${esc(l)} ด้วยกล้อง">${icon("camera")}</button></span>`:inp}</label>`;
 }
 function openRow(r,mode){
   if(!canWrite){toast("บัญชีนี้ดูได้อย่างเดียว");return}
@@ -978,6 +1001,10 @@ function openBulk(c,ks){
      </tbody></table></div>
      <div class="row2"><button class="btn sm" type="button" id="pFillAllEmpty">ใส่ทุกขั้นตอน (เฉพาะแถวว่าง)</button></div></div>`:"";
   $("#stTools").innerHTML=docPanel+(snKeys.length?`
+   <div class="tool scan"><b>${icon("camera")} ยิงบาร์โค้ด / สแกน SN ทีละตัว</b><span class="hint">ใช้เครื่องยิงบาร์โค้ด (USB / Bluetooth) ยิงที่ช่องนี้ หรือกด “กล้อง” เพื่อสแกนด้วยมือถือ SN จะเติมลงแถวที่ว่างให้ทันที</span>
+     ${snKeys.length>1?`<div class="row2"><select id="scanKey" aria-label="ช่อง SN ที่จะเติม">${snKeys.map(k=>`<option value="${k}">${esc(LABEL[k])}</option>`).join("")}</select></div>`:""}
+     <div class="row2"><input id="scanIn" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="done" placeholder="คลิกที่นี่แล้วยิงบาร์โค้ด" aria-label="ช่องรับ SN จากเครื่องยิงบาร์โค้ด"><button class="btn sm" type="button" id="scanCam">${icon("camera")}กล้อง</button></div>
+     <div class="scanmsg" id="scanMsg" aria-live="polite"></div></div>
    <div class="tool"><b>วาง SN หลายตัว</b><span class="hint">1 บรรทัด = 1 SN จะเติมลงแถวที่ว่างก่อน ถ้าเกินจะเพิ่มแถวใหม่ให้</span>
      ${snKeys.length>1?`<div class="row2"><select id="stPasteKey">${snKeys.map(k=>`<option value="${k}">${esc(LABEL[k])}</option>`).join("")}</select></div>`:""}
      <textarea id="stPaste" placeholder="SJ1234-07B0AAAAA-01&#10;SJ1234-07B0AAAAB-02"></textarea>
@@ -989,6 +1016,14 @@ function openBulk(c,ks){
    <div class="tool"><b>เพิ่มแถว (หน่วยสินค้า)</b><span class="hint">แถวใหม่จะคัดลอกข้อมูลใบเคลมและแทรกต่อจากเคลมนี้ในชีต</span>
      <div class="row2"><input id="stAddN" type="number" min="1" max="300" value="1" style="max-width:90px"><button class="btn sm" type="button" id="stAdd">+ เพิ่มแถว</button></div></div>`;
   const T=$("#stTools");
+  bulk.scanN=0;
+  if($("#scanIn")){
+    const si=$("#scanIn");
+    const go=()=>{const raw=si.value;si.value="";const res=bulkScan(raw);if(!res)return;showScan($("#scanMsg"),res)};
+    si.addEventListener("keydown",e=>{if(e.key==="Enter"||(e.key==="Tab"&&norm(si.value))){e.preventDefault();go()}});
+    $("#scanCam").onclick=()=>openCam(`สแกน ${LABEL[$("#scanKey")?$("#scanKey").value:snKeys[0]]} · เคลม ${c.no}`,raw=>{const res=bulkScan(raw);if(res)showScan($("#scanMsg"),res);return res},false);
+    if($("#scanKey"))$("#scanKey").onchange=()=>si.focus();
+  }
   if($("#stPasteGo"))$("#stPasteGo").onclick=()=>{syncBulk();const key=$("#stPasteKey")?$("#stPasteKey").value:snKeys[0];const list=$("#stPaste").value.split(/[\r\n\t]+/).map(norm).filter(Boolean);let i=0,filled=0,added=0;
     for(const it of bulk.items){if(i>=list.length)break;if(!it.del&&!norm(it.v[key])){it.v[key]=list[i++];filled++}}
     while(i<list.length){bulk.items.push(newItem({[key]:list[i++]}));added++}
@@ -1000,6 +1035,7 @@ function openBulk(c,ks){
   if($("#pFillAllEmpty"))$("#pFillAllEmpty").onclick=()=>{syncBulk();ks.forEach(k=>panelFill(k,false));renderBulk()};
   $("#stAdd").onclick=()=>{syncBulk();const n=Math.min(300,Math.max(1,parseInt($("#stAddN").value,10)||1));for(let i=0;i<n;i++)bulk.items.push(newItem({}));renderBulk()};
   renderBulk();$("#dlgStage").showModal();
+  if($("#scanIn")&&matchMedia("(pointer:fine)").matches)$("#scanIn").focus();
 }
 function newItem(v){const h=bulk.c.head,o={};bulk.F.forEach(f=>o[f.k]=/Pcode$/.test(f.k)?norm(h.pcode):(f.st===1?norm(h[f.k]):""));return {r:null,v:{...o,...v},del:false,hdr:{...pick(h,HEADER_FIELDS),pcode:h.pcode}}}
 function syncBulk(){if(!bulk)return;$("#stBody").querySelectorAll("input[data-i]").forEach(inp=>{const it=bulk.items[+inp.dataset.i];if(inp.type==="checkbox")it.del=inp.checked;else it.v[inp.dataset.k]=norm(inp.value)})}
@@ -1023,11 +1059,12 @@ function renderBulk(){
   $("#stBody").innerHTML=`<div class="tablewrap" style="max-height:${all?46:52}vh"><table class="bt"><thead>
    ${all?`<tr class="g"><th colspan="3"></th>${groups.map(g=>`<th colspan="${g.n}" style="--sc:var(${STAGES[g.k-1].c})">${g.k}. ${esc(STAGES[g.k-1].sub)}</th>`).join("")}<th></th></tr>`:""}
    <tr><th>#</th><th>แถวชีต</th><th>รหัสสินค้า</th>${ref?`<th>${esc(LABEL[ref])}</th>`:""}${F.map(f=>`<th>${esc(f.l)}</th>`).join("")}<th>ลบ</th></tr></thead><tbody>
-   ${items.map((it,i)=>`<tr class="${it.del?"del":""} ${it.r?"":"new"}"><td class="mono">${i+1}</td><td class="mono">${it.r?it.r.row:"ใหม่"}</td><td class="mono">${esc(it.r?it.r.pcode:it.hdr.pcode)}</td>${ref?`<td class="mono">${esc(it.r?it.r[ref]:"")||"–"}</td>`:""}
+   ${items.map((it,i)=>`<tr data-ri="${i}" class="${it.del?"del":""} ${it.r?"":"new"}"><td class="mono">${i+1}</td><td class="mono">${it.r?it.r.row:"ใหม่"}</td><td class="mono">${esc(it.r?it.r.pcode:it.hdr.pcode)}</td>${ref?`<td class="mono">${esc(it.r?it.r[ref]:"")||"–"}</td>`:""}
    ${F.map(f=>`<td><input data-i="${i}" data-k="${f.k}" value="${esc(it.v[f.k])}" ${f.type==="date"?'placeholder="วว/ดด/ปปปป"':""} class="${bad.has(f.k+":"+i)?"dup":""}"></td>`).join("")}
    <td><input type="checkbox" data-i="${i}" ${it.del?"checked":""} aria-label="ลบแถว ${i+1}" style="min-width:0;width:auto"></td></tr>`).join("")}
   </tbody></table></div>`;
   $("#stBody").querySelectorAll("input[type=checkbox]").forEach(cb=>cb.onchange=()=>{syncBulk();bulk.delArmed=false;renderBulk()});
+  $("#stBody").querySelectorAll("input[data-k]").forEach(inp=>inp.onkeydown=e=>{if(e.key!=="Enter")return;e.preventDefault();const nx=$("#stBody").querySelector(`input[data-k="${inp.dataset.k}"][data-i="${+inp.dataset.i+1}"]`);inp.dispatchEvent(new Event("change"));if(nx){nx.focus();nx.select()}});
   $("#stBody").querySelectorAll("input[data-k]").forEach(inp=>inp.onchange=()=>{syncBulk();const {bad}=bulkDupes();$("#stBody").querySelectorAll("input[data-k]").forEach(x=>x.classList.toggle("dup",bad.has(x.dataset.k+":"+x.dataset.i)))});
 }
 $("#stSave").onclick=async()=>{
@@ -1052,6 +1089,98 @@ $("#stSave").onclick=async()=>{
   }catch(err){$("#stErr").textContent=writeErr(err)}
   finally{$("#stSave").disabled=false;$("#stSave").textContent="บันทึกลงชีต"}
 };
+/* ---------- barcode scanning: keyboard-wedge scanners + phone camera ---------- */
+const SN_KEYS=["issSn","retSn","rcvSn","okSn"];
+// A USB/Bluetooth scanner "types" the code. If the PC keyboard is set to Thai, the letters come out as Thai
+// characters (Kedmanee layout), so map them back to the US keys that were pressed.
+const TH_KEYS=(()=>{const us="`1234567890-=qwertyuiop[]\\asdfghjkl;'zxcvbnm,./~!@#$%^&*()_+QWERTYUIOP{}|ASDFGHJKL:\"ZXCVBNM<>?",
+  th="_ๅ/-ภถุึคตจขชๆไำพะัีรนยบลฃฟหกดเ้่าสวงผปแอิืทมใฝ%+๑๒๓๔ู฿๕๖๗๘๙๐\"ฎฑธํ๊ณฯญฐ,ฅฤฆฏโฌ็๋ษศซ.()ฉฮฺ์?ฒฬฦ";
+  const m=new Map();[...th].forEach((ch,i)=>{if(!m.has(ch))m.set(ch,us[i])});return m})();
+function cleanSn(raw){
+  let v=String(raw==null?"":raw).replace(/[\u0000-\u001f\u007f]/g,"").trim(),fixed=false;
+  if(/[\u0E00-\u0E7F]/.test(v)){v=[...v].map(ch=>TH_KEYS.get(ch)||ch).join("");fixed=true}
+  v=v.replace(/^(?:s\/?n|serial(?:\s*(?:no|number))?\.?)\s*[:#]\s*/i,"").trim();
+  return {sn:v,fixed};
+}
+let actx=null;
+function beep(ok){
+  try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==="suspended")actx.resume();
+    let t=actx.currentTime;for(const [f,d] of ok?[[1500,.08]]:[[300,.13],[0,.06],[300,.2]]){if(f){const o=actx.createOscillator(),g=actx.createGain();o.type=ok?"sine":"square";o.frequency.value=f;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(ok?.3:.18,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g).connect(actx.destination);o.start(t);o.stop(t+d+.02)}t+=d}}catch(e){}
+  try{navigator.vibrate&&navigator.vibrate(ok?50:[120,60,120])}catch(e){}
+}
+function showScan(el,res){if(!el)return;el.textContent=res.msg;el.className="scanmsg "+(res.ok?(res.warn?"warn":"ok"):"bad")}
+// Put one scanned SN into the open bulk editor. Returns {ok,msg,warn}.
+function bulkScan(raw){
+  if(!bulk)return null;
+  const {sn,fixed}=cleanSn(raw);if(!sn)return null;
+  syncBulk();
+  const key=$("#scanKey")?$("#scanKey").value:bulk.snKeys[0],v=low(sn),lbl=LABEL[key];
+  const val=(it,k)=>k in it.v?it.v[k]:(it.r?it.r[k]:"");
+  const live=bulk.items.map((it,i)=>({it,i})).filter(x=>!x.it.del);
+  const flash=(i,cls)=>{const tr=$("#stBody").querySelector(`tr[data-ri="${i}"]`);if(!tr)return;tr.classList.add(cls);tr.scrollIntoView({block:"nearest"});setTimeout(()=>tr.classList.remove(cls),1600)};
+  const done=res=>{beep(res.ok);return res};
+  const same=live.find(x=>low(x.it.v[key])===v);
+  if(same){flash(same.i,"hitbad");return done({ok:false,msg:`✗ ${sn} ซ้ำ · สแกนแล้วที่แถว ${same.i+1}`})}
+  const mine=new Set(bulk.items.filter(it=>it.r).map(it=>it.r.id));
+  const d=rows.find(r=>!mine.has(r.id)&&low(r[key])===v);
+  if(d)return done({ok:false,msg:`✗ ${sn} มีอยู่แล้วในเคลม ${d.claimNo} (${lbl}) ไม่ได้เติม`});
+  const empty=live.filter(x=>!norm(x.it.v[key]));
+  const match=empty.find(x=>SN_KEYS.some(k=>k!==key&&low(val(x.it,k))===v));
+  let i,note="";
+  if(match){i=match.i;note=` (ตรงกับ ${LABEL[SN_KEYS.find(k=>k!==key&&low(val(match.it,k))===v)]} ของแถวนี้)`}
+  else if(empty.length)i=empty[0].i;
+  else{bulk.items.push(newItem({}));i=bulk.items.length-1;note=" · เพิ่มแถวใหม่ (เกินจำนวนเดิม)"}
+  bulk.items[i].v[key]=sn;bulk.scanN++;
+  renderBulk();flash(i,"hit");
+  const left=bulk.items.filter(it=>!it.del&&!norm(it.v[key])).length;
+  return done({ok:true,warn:!!note&&!match,msg:`✓ ${sn} → แถว ${i+1}${note}${fixed?" · แปลงจากแป้นภาษาไทยให้แล้ว":""} · สแกนแล้ว ${bulk.scanN} ตัว · ${lbl} ยังว่าง ${left} แถว`});
+}
+// dlgRow: Enter from a scanner in an SN field must not submit the form; check for duplicates and move on.
+function rowSnCheck(k,sn){
+  const d=rows.find(r=>r.id!==(editing.r&&editing.r.id)&&low(r[k])===low(sn));
+  return d?{ok:false,msg:`${LABEL[k]} ${sn} ถูกบันทึกแล้วในเคลม ${d.claimNo}`}:{ok:true,msg:`✓ ${LABEL[k]} ${sn}`};
+}
+function rowNextField(inp){const all=[...$("#rowBody").querySelectorAll("input:not([readonly])")];const nx=all[all.indexOf(inp)+1];if(nx){nx.focus();if(nx.select)nx.select()}else $("#rowSave").focus()}
+$("#rowBody").addEventListener("keydown",e=>{
+  const inp=e.target;if(e.key!=="Enter"||!inp.matches||!inp.matches("input")||!SN_KEYS.includes(inp.name))return;
+  e.preventDefault();const {sn,fixed}=cleanSn(inp.value);if(!sn){rowNextField(inp);return}
+  if(fixed)inp.value=sn;const res=rowSnCheck(inp.name,sn);beep(res.ok);$("#rowErr").textContent=res.ok?"":res.msg;if(res.ok)rowNextField(inp);else inp.select();
+});
+$("#rowBody").addEventListener("click",e=>{const b=e.target.closest("[data-cam]");if(!b)return;e.preventDefault();const k=b.dataset.cam;
+  openCam(`สแกน ${LABEL[k]}`,raw=>{const {sn}=cleanSn(raw);if(!sn)return null;const res=rowSnCheck(k,sn);beep(res.ok);if(res.ok){$("#f_"+k).value=sn;$("#rowErr").textContent=""}return res},true)});
+// camera
+let cam=null,camCtl=null;
+async function openCam(title,onCode,once){
+  camCtl={onCode,once,last:"",at:0};
+  $("#scTitle").textContent=title;$("#scList").innerHTML="";
+  const msg=(t,cls)=>{$("#scMsg").textContent=t;$("#scMsg").className="scanmsg "+(cls||"")};
+  msg("กำลังเปิดกล้อง…");$("#dlgScan").showModal();
+  try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume()}catch(e){}
+  if(!window.isSecureContext||!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){msg("เบราว์เซอร์นี้เปิดกล้องไม่ได้ ต้องเปิดเว็บผ่าน https","bad");return}
+  LIBS.qr=CDN+"html5-qrcode@2.3.8/html5-qrcode.min.js";
+  try{await lib("qr")}catch(e){msg(e.message,"bad");return}
+  if(!$("#dlgScan").open)return;
+  const L=window.__Html5QrcodeLibrary__,F=L.Html5QrcodeSupportedFormats;
+  const fm=[F.CODE_128,F.CODE_39,F.CODE_93,F.QR_CODE,F.DATA_MATRIX,F.EAN_13,F.ITF];
+  const h=new L.Html5Qrcode("scView",{verbose:false,formatsToSupport:fm,useBarCodeDetectorIfSupported:true,experimentalFeatures:{useBarCodeDetectorIfSupported:true}});
+  cam=h;
+  try{
+    await h.start({facingMode:"environment"},{fps:12,aspectRatio:1.333,qrbox:(w,hh)=>{const bw=Math.max(160,Math.floor(Math.min(w*.9,460)));return {width:bw,height:Math.max(80,Math.floor(Math.min(hh*.7,bw*.55)))}}},text=>onCamCode(text),()=>{});
+    if(cam!==h){try{await h.stop()}catch(e){}try{h.clear()}catch(e){}return}
+    msg(once?"เล็งกล้องไปที่บาร์โค้ด SN ให้อยู่ในกรอบ":"เล็งกล้องไปที่บาร์โค้ด SN ทีละตัว ระบบจะเติมให้แล้วสแกนตัวต่อไปได้เลย");
+  }catch(e){if(cam===h)cam=null;msg("เปิดกล้องไม่ได้: "+((e&&e.message)||e)+" · ตรวจว่าอนุญาตให้เว็บนี้ใช้กล้องแล้ว","bad")}
+}
+function onCamCode(text){
+  const c=camCtl;if(!c)return;const now=Date.now(),t=norm(text);
+  if(!t||t===c.last||now-c.at<900)return;   // same label still in view, or too soon after the last one
+  c.last=t;c.at=now;
+  const res=c.onCode(t);if(!res)return;
+  $("#scMsg").textContent=res.msg;$("#scMsg").className="scanmsg "+(res.ok?(res.warn?"warn":"ok"):"bad");
+  const li=document.createElement("li");li.className=res.ok?"ok":"bad";li.textContent=res.msg;$("#scList").prepend(li);
+  if(c.once&&res.ok){camCtl=null;setTimeout(()=>$("#dlgScan").open&&$("#dlgScan").close(),400)}
+}
+$("#dlgScan").addEventListener("close",async()=>{camCtl=null;const h=cam;cam=null;if(h){try{if(h.isScanning)await h.stop()}catch(e){}try{h.clear()}catch(e){}}$("#scView").innerHTML="";if($("#dlgStage").open&&$("#scanIn"))$("#scanIn").focus()});
+
 /* ---------- dashboard ---------- */
 const TH_M=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 const NF=new Intl.NumberFormat("th-TH");
