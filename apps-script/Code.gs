@@ -4,7 +4,7 @@
  * สคริปต์อ่าน/เขียน Google Sheet งานเคลมโดยตรง (ข้อมูลสดเสมอ)
  * ทำให้ใช้งานได้เป็น "เว็บแอป": เรียกใช้ในฐานะ = ฉัน, ผู้มีสิทธิ์เข้าถึง = ทุกคน
  */
-const API_VERSION = '2026.11.03-1';
+const API_VERSION = '2026.11.03-2';
 const CONFIG = {
   SPREADSHEET_ID: '1P_bzAam7-MREtOz1Lw6gEPzryMVzSJOy8_Ly0zehui8', // ID ของไฟล์ชีตงานเคลม (อยู่ในลิงก์ระหว่าง /d/ กับ /edit)
   SHEET_GID: 200224574,    // gid ของแท็บฐานข้อมูล (ตัวเลขหลัง #gid= ในลิงก์ชีต)
@@ -12,7 +12,9 @@ const CONFIG = {
   DATA_START_ROW: 6,       // แถวแรกของข้อมูล (แถว 1–5 เป็นหัวตาราง)
   LOG_SHEET: 'ประวัติแก้ไข', // ชีตเก็บประวัติการแก้ไขจาก Web app
   SESSION_HOURS: 6,        // Admin อยู่ในระบบได้นานกี่ชั่วโมง (สูงสุด 6)
-  VIEWER_DAYS: 30          // ผู้ดูที่ใส่รหัสผู้ดูแล้ว ไม่ต้องใส่ซ้ำกี่วัน (ใช้เมื่อเปิดรหัสผู้ดูด้วย setupViewer)
+  VIEWER_DAYS: 30,         // ผู้ดูที่ใส่รหัสผู้ดูแล้ว ไม่ต้องใส่ซ้ำกี่วัน (ใช้เมื่อเปิดรหัสผู้ดูด้วย setupViewer)
+  PHOTO_FOLDER_ID: '',     // โฟลเดอร์ Google Drive เก็บรูปงานเคลม (ว่าง = สร้างโฟลเดอร์ "รูปงานเคลม SSC" ใน Drive ของเจ้าของสคริปต์ให้เอง)
+  PHOTO_STAGES: [1, 2]     // ขั้นตอนที่แนบรูปได้
 };
 
 /**
@@ -63,7 +65,11 @@ const API_ = {
   updateRows:  { run: function (a, c) { return updateRows(a[0], c.token); } },
   addRows:     { run: function (a, c) { return addRows(a[0], c.token); } },
   deleteRows:  { run: function (a, c) { return deleteRows(a[0], c.token); } },
-  writeSummary:{ run: function (a, c) { return writeSummary(a[0], c.token); } }
+  writeSummary:{ run: function (a, c) { return writeSummary(a[0], c.token); } },
+  listPhotos:  { run: function (a) { return listPhotos(a[0]); } },
+  getPhoto:    { run: function (a) { return getPhoto(a[0]); } },
+  uploadPhoto: { run: function (a, c) { return uploadPhoto(a[0], c.token); } },
+  deletePhoto: { run: function (a, c) { return deletePhoto(a[0], c.token); } }
 };
 function json_(o) {
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
@@ -356,4 +362,97 @@ function writeSummary(tables, token) {
     });
     return { tabs: n };
   } finally { lock.releaseLock(); }
+}
+
+/* ---------- รูปงานเคลม (เก็บใน Google Drive ของเจ้าของสคริปต์ ไม่ได้แชร์สาธารณะ) ----------
+ * โครงสร้าง: โฟลเดอร์หลัก / <เลขเคลม> / S1_วันเวลา_xxxx.jpg (+ .thumb.jpg รูปย่อ)
+ * หน้าเว็บดึงรูปผ่าน API นี้เท่านั้น จึงใช้สิทธิ์เดียวกับข้อมูลเคลม (รหัสผู้ดู / Admin)
+ * ครั้งแรกหลังอัปเดตโค้ด: เลือกฟังก์ชัน setupPhotos แล้วกด เรียกใช้ (Run) 1 ครั้ง เพื่ออนุญาตให้สคริปต์ใช้ Google Drive
+ */
+function setupPhotos() { const f = photoRoot_(); Logger.log('โฟลเดอร์เก็บรูป: ' + f.getName() + ' ' + f.getUrl()); }
+function photoRoot_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = CONFIG.PHOTO_FOLDER_ID || props.getProperty('photo_root');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) { if (CONFIG.PHOTO_FOLDER_ID) throw new Error('เปิดโฟลเดอร์รูป PHOTO_FOLDER_ID ไม่ได้'); } }
+  const f = DriveApp.createFolder('รูปงานเคลม SSC');
+  props.setProperty('photo_root', f.getId());
+  return f;
+}
+function claimKey_(no) {
+  no = String(no == null ? '' : no).trim();
+  if (!no || no.length > 40 || /[\/\\]/.test(no)) throw apiErr_('BAD_REQUEST', 'เลขเคลมไม่ถูกต้อง');
+  return no;
+}
+function claimFolder_(no, create) {
+  const root = photoRoot_(), it = root.getFoldersByName(no);
+  if (it.hasNext()) return it.next();
+  return create ? root.createFolder(no) : null;
+}
+/** ไฟล์นี้อยู่ในโฟลเดอร์รูปงานเคลมจริงไหม (กันการขอไฟล์อื่นใน Drive ด้วย id) */
+function photoFile_(id) {
+  let f;
+  try { f = DriveApp.getFileById(String(id || '')); } catch (e) { throw apiErr_('BAD_REQUEST', 'ไม่พบรูปนี้'); }
+  const rootId = photoRoot_().getId(), ps = f.getParents();
+  while (ps.hasNext()) { const p = ps.next(), gp = p.getParents(); while (gp.hasNext()) if (gp.next().getId() === rootId) return { file: f, folder: p }; }
+  throw apiErr_('BAD_REQUEST', 'ไม่พบรูปนี้');
+}
+function photoInfo_(f) {
+  let d = {}; try { d = JSON.parse(f.getDescription() || '{}'); } catch (e) {}
+  const m = /^S(\d)_/.exec(f.getName());
+  return { id: f.getId(), name: f.getName(), stage: Number(d.stage || (m && m[1]) || 0), by: d.by || '', at: d.at || f.getDateCreated().toISOString(), orig: d.orig || '', size: f.getSize() };
+}
+/** รายการรูปของเลขเคลม พร้อมรูปย่อ (base64) */
+function listPhotos(no) {
+  const folder = claimFolder_(claimKey_(no), false);
+  if (!folder) return [];
+  const full = [], thumbs = {}, it = folder.getFiles();
+  while (it.hasNext()) {
+    const f = it.next();
+    if (f.isTrashed()) continue;
+    const n = f.getName();
+    if (/\.thumb\.jpg$/.test(n)) thumbs[n.replace(/\.thumb\.jpg$/, '')] = f; else full.push(f);
+  }
+  return full.map(function (f) {
+    const o = photoInfo_(f), t = thumbs[f.getName().replace(/\.[^.]+$/, '')];
+    o.thumb = t ? Utilities.base64Encode(t.getBlob().getBytes()) : '';
+    return o;
+  }).sort(function (a, b) { return a.at < b.at ? -1 : 1; });
+}
+/** รูปขนาดเต็ม */
+function getPhoto(id) {
+  const f = photoFile_(id).file, b = f.getBlob();
+  return { mime: b.getContentType(), data: Utilities.base64Encode(b.getBytes()), info: photoInfo_(f) };
+}
+/** p = {claimNo, stage, mime, data(base64), thumb(base64 jpeg), name} */
+function uploadPhoto(p, token) {
+  const who = requireAdmin_(token);
+  p = p || {};
+  const no = claimKey_(p.claimNo), stage = Number(p.stage);
+  if (CONFIG.PHOTO_STAGES.indexOf(stage) < 0) throw apiErr_('BAD_REQUEST', 'แนบรูปได้เฉพาะขั้นตอน ' + CONFIG.PHOTO_STAGES.join(', '));
+  if (['image/jpeg', 'image/png', 'image/webp'].indexOf(p.mime) < 0) throw apiErr_('BAD_REQUEST', 'รองรับเฉพาะไฟล์รูป JPG / PNG / WEBP');
+  const bytes = Utilities.base64Decode(String(p.data || ''));
+  if (!bytes.length || bytes.length > 8 * 1024 * 1024) throw apiErr_('BAD_REQUEST', 'ไฟล์รูปต้องไม่เกิน 8 MB');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const folder = claimFolder_(no, true), now = new Date();
+    const base = 'S' + stage + '_' + Utilities.formatDate(now, 'Asia/Bangkok', 'yyyyMMdd-HHmmss') + '_' + Utilities.getUuid().slice(0, 4);
+    const ext = p.mime === 'image/png' ? '.png' : p.mime === 'image/webp' ? '.webp' : '.jpg';
+    const f = folder.createFile(Utilities.newBlob(bytes, p.mime, base + ext));
+    f.setDescription(JSON.stringify({ stage: stage, by: who, at: now.toISOString(), orig: String(p.name || '').slice(0, 120) }));
+    if (p.thumb) folder.createFile(Utilities.newBlob(Utilities.base64Decode(String(p.thumb)), 'image/jpeg', base + '.thumb.jpg'));
+    log_([[now, who, '', no, 'เพิ่มรูป ขั้นตอน ' + stage, '', f.getName()]]);
+    const o = photoInfo_(f); o.thumb = String(p.thumb || '');
+    return o;
+  } finally { lock.releaseLock(); }
+}
+/** ลบรูป (ย้ายไปถังขยะของ Drive กู้คืนได้ 30 วัน) */
+function deletePhoto(id, token) {
+  const who = requireAdmin_(token);
+  const x = photoFile_(id), name = x.file.getName();
+  const t = x.folder.getFilesByName(name.replace(/\.[^.]+$/, '') + '.thumb.jpg');
+  while (t.hasNext()) t.next().setTrashed(true);
+  x.file.setTrashed(true);
+  log_([[new Date(), who, '', x.folder.getName(), 'ลบรูป', name, '']]);
+  return true;
 }
