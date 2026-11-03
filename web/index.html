@@ -261,6 +261,30 @@ label.f input.err{border-color:var(--bad)}
 .dg thead tr.g th{top:0}.dg thead tr+tr th{top:34px}
 .dbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .dbar input,.dbar select{padding:7px 10px;border:1px solid var(--line2);border-radius:var(--r-sm);background:var(--surface);min-width:0}
+/* claim photos (stages 1-2) */
+.photos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:760px){.photos{grid-template-columns:minmax(0,1fr)}}
+.pgrp{border:1px solid var(--line);border-top:3px solid var(--sc);border-radius:var(--r-sm);padding:12px;min-width:0;display:grid;gap:10px;align-content:start}
+.pgrp .ph{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.pgrp .ph b{font-size:13px}
+.pgrp .ph small{display:block;color:var(--muted);font-family:var(--f-mono);font-size:11px}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.thumb{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--sunk);padding:0;cursor:zoom-in;display:grid;place-items:center;color:var(--faint)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb:hover{border-color:var(--accent)}
+.thumb.up{cursor:default;font-size:11px;text-align:center;padding:6px}
+.pempty{color:var(--faint);font-size:12.5px;padding:14px 0;text-align:center;border:1px dashed var(--line2);border-radius:8px}
+.pgrp.on{border-color:var(--accent);background:var(--accent-soft)}
+#dlgPhoto{width:min(1100px,calc(100vw - 32px));background:#0b0f19;color:#e6ebf5;border-color:#263049}
+#dlgPhoto .dlg header,#dlgPhoto .dlg footer{border-color:#263049;background:#0b0f19}
+#dlgPhoto .btn{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.18);color:#e6ebf5}
+#dlgPhoto .btn:hover{background:rgba(255,255,255,.14)}
+#dlgPhoto .btn.danger{color:#ff8a7d;border-color:rgba(255,122,107,.5)}
+.pv2{display:grid;place-items:center;min-height:50vh;padding:12px;position:relative}
+.pv2 img{max-width:100%;max-height:calc(100vh - 210px);border-radius:6px;display:block}
+.pv2 .nav{position:absolute;top:50%;transform:translateY(-50%);width:40px;height:40px;padding:0;border-radius:50%}
+.pv2 .nav.l{left:12px}.pv2 .nav.r{right:12px}
+.pcap{font-size:12.5px;color:#9aa5bb;margin-right:auto}
 /* paste from Excel */
 #dlgPaste{width:min(1280px,calc(100vw - 32px))}
 .steps{display:flex;gap:8px 18px;flex-wrap:wrap;margin:0;padding:0;list-style:none;font-size:13px;color:var(--muted)}
@@ -388,13 +412,14 @@ body.ro .w{display:none!important}
   <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></symbol>
   <symbol id="i-sort" viewBox="0 0 24 24"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></symbol>
   <symbol id="i-paste" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></symbol>
   <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1 3h6l1-3h5"/><path d="M5 5h14l2 8v6H3v-6z"/></symbol>
 </svg>
 
 <header class="appbar">
   <div class="brand">
     <div class="logo" aria-hidden="true"><svg class="ic"><use href="#i-sun"/></svg></div>
-    <div><h1>ระบบติดตามงานเคลม<span class="ver">v2026.11.03-5</span></h1><span class="tag">SSC · SolarEdge Warranty Claim</span></div>
+    <div><h1>ระบบติดตามงานเคลม<span class="ver">v2026.11.03-6</span></h1><span class="tag">SSC · SolarEdge Warranty Claim</span></div>
   </div>
   <div class="userbox">
     <span class="role" id="roleBadge">ผู้ดู · อ่านอย่างเดียว</span>
@@ -511,6 +536,12 @@ body.ro .w{display:none!important}
     <button class="btn" type="button" id="dReset">ล้างที่แก้ไข</button>
     <button class="btn primary" type="button" id="dSave">บันทึกลงชีต</button>
   </footer>
+</div></dialog>
+
+<dialog id="dlgPhoto"><div class="dlg">
+  <header><h3 id="phTitle">รูป</h3><button class="btn sm" type="button" data-close>ปิด</button></header>
+  <div class="pv2"><img id="phImg" alt=""><span id="phLoad">กำลังโหลดรูป…</span><button class="btn nav l" type="button" id="phPrev" aria-label="รูปก่อนหน้า">‹</button><button class="btn nav r" type="button" id="phNext" aria-label="รูปถัดไป">›</button></div>
+  <footer><span class="pcap" id="phCap"></span><button class="btn sm danger w" type="button" id="phDel">ลบรูปนี้</button><button class="btn sm" type="button" id="phDl">ดาวน์โหลด</button></footer>
 </div></dialog>
 
 <dialog id="dlgPaste"><div class="dlg">
@@ -809,6 +840,7 @@ function renderDetail(){
     <span class="chip ${st.cls}">${esc(st.label)}${st.txt?` · ${esc(st.txt)}`:""}</span>
     <button class="btn sm w" type="button" data-stage="${s.k}">${icon("edit")}${s.k===1?"แก้ไขใบเคลม":"กรอก/แก้ไข"}</button></div>`}).join("")}</div>
   </div>
+  ${c.no!=="(ไม่มีเลขเคลม)"?`<div class="card" id="photoCard"><div class="sect"><h3>รูปภาพ</h3><span class="hint">รูปตอนรับของเคลมจากลูกค้า (ขั้นตอน 1) และตอนส่งของให้ลูกค้า (ขั้นตอน 2)</span></div><div id="photoBox"></div></div>`:""}
   <div class="card">
     <div class="sect"><h3>รายการหน่วยสินค้า (${c.rows.length})</h3>${c.flags?`<span class="badge problem">${c.flags} จุดที่ต้องตรวจ</span>`:""}</div>
     <div class="tablewrap">
@@ -833,6 +865,7 @@ function renderDetail(){
   $("#dAddUnit").onclick=()=>openRow({...pick(h,HEADER_FIELDS),pcode:h.pcode},"add");
   box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openRow(rows.find(r=>r.id===b.dataset.edit),"edit"));
   resolveAudit();
+  if(c.no!=="(ไม่มีเลขเคลม)")renderPhotos(c.no);
 }
 async function resolveAudit(){
   const sp=document.querySelector("#audit [data-uid]");if(!sp||!sp.dataset.uid||!user||!user.profiles)return;
@@ -1440,6 +1473,73 @@ document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>b.closest("di
 $("#btnNew").onclick=()=>openRow({...blank(),qty:"1"},"new");
 $("#rowBody").addEventListener("click",e=>{if(e.target.closest("#rowToPaste")){$("#dlgRow").close();openPaste()}});
 
+/* ---------- claim photos (stages 1-2), stored in the script owner's Google Drive ---------- */
+const PH_ST=[{k:1,t:"รับของเคลมจากลูกค้า",d:"ขั้นตอน 1 · ลูกค้า >> SSC",c:"--s1"},{k:2,t:"ส่งของให้ลูกค้า",d:"ขั้นตอน 2 · SSC >> ลูกค้า",c:"--s2"}];
+let apiVer="";const phCache=new Map(),phLoading=new Map(),phUp={};let phView=null;
+const phOld=()=>apiVer&&apiVer<"2026.11.03-2";
+function loadPhotos(no,force){
+  if(!force&&phCache.has(no))return Promise.resolve(phCache.get(no));
+  if(!force&&phLoading.has(no))return phLoading.get(no);
+  const p=run("listPhotos",no).then(list=>{phCache.set(no,list);return list}).finally(()=>phLoading.delete(no));
+  phLoading.set(no,p);return p;
+}
+function renderPhotos(no){
+  const box=$("#photoBox");if(!box)return;
+  if(phOld()){box.innerHTML=`<div class="pempty">ต้องอัปเดต Apps Script (Code.gs) เป็นเวอร์ชันล่าสุดก่อน จึงจะแนบรูปได้</div>`;return}
+  const list=phCache.get(no),up=phUp[no]||{};
+  box.innerHTML=`<div class="photos">${PH_ST.map(s=>{const ps=(list||[]).filter(x=>x.stage===s.k),n=up[s.k]||0;return `<div class="pgrp" style="--sc:var(${s.c})" data-st="${s.k}">
+    <div class="ph"><div><b>${esc(s.t)}</b><small>${esc(s.d)} · ${list?ps.length+" รูป":"…"}</small></div>
+    <label class="btn sm w">${icon("camera")}เพิ่มรูป<input type="file" accept="image/*" multiple hidden data-up="${s.k}"></label></div>
+    ${!list?`<div class="thumbs"><div class="thumb skel" style="border:0"><i style="width:100%;height:100%;margin:0"></i></div></div>`
+     :ps.length||n?`<div class="thumbs">${ps.map(x=>`<button type="button" class="thumb" data-ph="${esc(x.id)}" title="${esc(x.orig||x.name)}">${x.thumb?`<img src="data:image/jpeg;base64,${x.thumb}" alt="" loading="lazy">`:icon("camera")}</button>`).join("")}${n?`<div class="thumb up">กำลังอัปโหลด ${n} รูป…</div>`:""}</div>`
+     :`<div class="pempty">ยังไม่มีรูป</div>`}
+  </div>`}).join("")}</div>`;
+  if(!list)loadPhotos(no).then(()=>{if(selected===no&&!auditOn)renderPhotos(no)}).catch(e=>{if(selected!==no)return;const b=$("#photoBox");if(b)b.innerHTML=`<div class="pempty">${/ไม่รู้จักคำสั่ง/.test(e&&e.message||"")?"ต้องอัปเดต Apps Script (Code.gs) เป็นเวอร์ชันล่าสุดก่อน จึงจะแนบรูปได้":"โหลดรูปไม่สำเร็จ: "+esc((e&&e.message)||"")}</div>`});
+}
+function shrink(file,max,q){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();
+  im.onload=()=>{const k=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight)),w=Math.round(im.naturalWidth*k),h=Math.round(im.naturalHeight*k);
+    const cv=document.createElement("canvas");cv.width=w;cv.height=h;const g=cv.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,w,h);g.drawImage(im,0,0,w,h);URL.revokeObjectURL(u);
+    res(cv.toDataURL("image/jpeg",q).split(",")[1])};
+  im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error(`เปิดไฟล์ ${file.name} ไม่ได้ (รองรับ JPG / PNG / WEBP)`))};im.src=u})}
+async function uploadPhotos(no,stage,files){
+  if(!canWrite){toast("บัญชีนี้ดูได้อย่างเดียว");return}
+  files=[...files].filter(f=>/^image\//.test(f.type)||/\.(jpe?g|png|webp|heic)$/i.test(f.name));if(!files.length)return;
+  phUp[no]=phUp[no]||{};phUp[no][stage]=(phUp[no][stage]||0)+files.length;if(selected===no)renderPhotos(no);
+  let ok=0;
+  for(const f of files){
+    try{const data=await shrink(f,1600,.82),thumb=await shrink(f,360,.72);
+      const info=await run("uploadPhoto",{claimNo:no,stage,mime:"image/jpeg",data,thumb,name:f.name});
+      const l=phCache.get(no);if(l)l.push(info);ok++}
+    catch(e){toast((e&&e.message)||"อัปโหลดรูปไม่สำเร็จ")}
+    finally{phUp[no][stage]--;if(selected===no)renderPhotos(no)}
+  }
+  if(ok)toast(`เพิ่มรูป ${ok} รูปแล้ว (ขั้นตอน ${stage})`);
+}
+$("#detail").addEventListener("change",e=>{const i=e.target.closest("input[data-up]");if(!i||!selected)return;uploadPhotos(selected,+i.dataset.up,i.files);i.value=""});
+["dragover","dragleave","drop"].forEach(ev=>$("#detail").addEventListener(ev,e=>{const g=e.target.closest(".pgrp");if(!g||!canWrite)return;e.preventDefault();g.classList.toggle("on",ev==="dragover");if(ev==="drop"&&selected)uploadPhotos(selected,+g.dataset.st,e.dataTransfer.files)}));
+$("#detail").addEventListener("click",e=>{const t=e.target.closest("[data-ph]");if(t)openPhoto(selected,t.dataset.ph)});
+async function openPhoto(no,id){
+  const list=phCache.get(no)||[],x=list.find(p=>p.id===id);if(!x)return;
+  const ps=list.filter(p=>p.stage===x.stage),i=ps.indexOf(x);phView={no,id,ps,i,data:null};
+  const st=PH_ST.find(s=>s.k===x.stage);
+  $("#phTitle").textContent=`เคลม ${no} · ${st?st.t:"ขั้นตอน "+x.stage} (${i+1}/${ps.length})`;
+  $("#phCap").textContent=`${new Date(x.at).toLocaleString("th-TH")}${x.by?" · โดย "+x.by:""}${x.orig?" · "+x.orig:""}`;
+  $("#phPrev").hidden=i<=0;$("#phNext").hidden=i>=ps.length-1;$("#phDel").textContent="ลบรูปนี้";$("#phDel").dataset.armed="";
+  const img=$("#phImg");img.src=x.thumb?`data:image/jpeg;base64,${x.thumb}`:"";img.hidden=!x.thumb;$("#phLoad").hidden=!!x.thumb;
+  if(!$("#dlgPhoto").open)$("#dlgPhoto").showModal();
+  try{const d=await run("getPhoto",id);if(phView&&phView.id===id){phView.data=d;img.src=`data:${d.mime};base64,${d.data}`;img.hidden=false;$("#phLoad").hidden=true}}
+  catch(e){if(phView&&phView.id===id){$("#phLoad").hidden=false;$("#phLoad").textContent="โหลดรูปไม่สำเร็จ: "+((e&&e.message)||"")}}
+}
+$("#phPrev").onclick=()=>{const v=phView;if(v&&v.i>0)openPhoto(v.no,v.ps[v.i-1].id)};
+$("#phNext").onclick=()=>{const v=phView;if(v&&v.i<v.ps.length-1)openPhoto(v.no,v.ps[v.i+1].id)};
+$("#dlgPhoto").addEventListener("keydown",e=>{if(e.key==="ArrowLeft")$("#phPrev").click();if(e.key==="ArrowRight")$("#phNext").click()});
+$("#dlgPhoto").addEventListener("close",()=>{phView=null;$("#phImg").src=""});
+$("#phDl").onclick=()=>{const v=phView;if(!v||!v.data){toast("รอโหลดรูปเต็มก่อน");return}const b=Uint8Array.from(atob(v.data.data),ch=>ch.charCodeAt(0));saveBlob(`claim-${String(v.no).replace(/[^\w.-]+/g,"_")}-${v.data.info.name}`,new Blob([b],{type:v.data.mime}))};
+$("#phDel").onclick=async()=>{const v=phView,b=$("#phDel");if(!v)return;
+  if(!b.dataset.armed){b.dataset.armed="1";b.textContent="กดอีกครั้งเพื่อยืนยันการลบ";return}
+  b.disabled=true;try{await run("deletePhoto",v.id);const l=phCache.get(v.no);if(l)phCache.set(v.no,l.filter(p=>p.id!==v.id));$("#dlgPhoto").close();toast("ลบรูปแล้ว");if(selected===v.no)renderPhotos(v.no)}
+  catch(e){toast((e&&e.message)||"ลบรูปไม่สำเร็จ")}finally{b.disabled=false}};
+
 /* ---------- paste claim forms (columns A–J) from Excel / Google Sheets ---------- */
 const PX_F=STAGES[0].f; // A..J
 let px=null;
@@ -1524,7 +1624,7 @@ function fromSheet(d){
   return out;
 }
 let loading=false,slowT=0,roleKnown=false,needViewer=false;
-run("whoami").then(r=>{needViewer=!!r.viewerRequired;if(!roleKnown){if(authTok&&r.role!=="admin"){authTok="";sess("claim.tok",null)}setRole(r.role,r.admin)}if(r.canRead===false)askViewer()})
+run("whoami").then(r=>{needViewer=!!r.viewerRequired;apiVer=r.api||"";if(!roleKnown){if(authTok&&r.role!=="admin"){authTok="";sess("claim.tok",null)}setRole(r.role,r.admin)}if(r.canRead===false)askViewer()})
   .catch(e=>{if(!roleKnown)setRole("viewer","");notice("ตรวจสิทธิ์ไม่สำเร็จ: "+((e&&e.message)||"")+(e&&e.code==="NO_API"?"":" ตรวจว่า Code.gs เป็นเวอร์ชันล่าสุดและทำให้ใช้งานได้เป็นเวอร์ชันใหม่แล้ว"),true)});
 async function load(force){
   if(loading)return;loading=true;
@@ -1539,7 +1639,7 @@ async function load(force){
   finally{loading=false;clearTimeout(slowT);stampTime()}
 }
 function stampTime(){if(loadedAt)$("#listCount").textContent=`${visibleClaims().length} เลขเคลม · ข้อมูล ณ ${loadedAt.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}`}
-$("#btnRefresh").onclick=()=>{toast("กำลังดึงข้อมูลล่าสุดจากชีต…");load(true)};
+$("#btnRefresh").onclick=()=>{phCache.clear();if(selected&&!auditOn)renderPhotos(selected);toast("กำลังดึงข้อมูลล่าสุดจากชีต…");load(true)};
 setInterval(()=>{if(document.visibilityState==="visible"&&!document.querySelector("dialog[open]")&&loadedAt)load(false)},20000);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&loadedAt)load(false)});
 load(true);
