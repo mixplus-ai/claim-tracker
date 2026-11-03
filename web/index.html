@@ -60,7 +60,9 @@ header.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background
 main{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:16px;padding:12px 16px 32px;align-items:start}
 @media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
 .list{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-width:0}
-.list .head{padding:8px 12px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
+.list .head{padding:8px 12px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.list .head .ctl{display:flex;gap:6px;align-items:center}
+.list .head select{padding:4px 6px;font-size:12.5px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
 .items{max-height:calc(100vh - 210px);overflow:auto}
 @media (max-width:860px){.items{max-height:46vh}}
 .item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:10px 12px;cursor:pointer}
@@ -249,7 +251,7 @@ body.ro .w{display:none!important}
 </head><body class="ro">
 
 <header class="bar">
-  <div class="brand"><h1>CLAIM TRACKER</h1><span>SSC · SolarEdge · v2026.11.03-1</span><span class="role" id="roleBadge">ผู้ดู · อ่านอย่างเดียว</span><button class="btn sm" type="button" id="btnLogin">เข้าสู่ระบบ Admin</button></div>
+  <div class="brand"><h1>CLAIM TRACKER</h1><span>SSC · SolarEdge · v2026.11.03-2</span><span class="role" id="roleBadge">ผู้ดู · อ่านอย่างเดียว</span><button class="btn sm" type="button" id="btnLogin">เข้าสู่ระบบ Admin</button></div>
   <div class="search">
     <select id="scope" aria-label="ค้นหาจาก">
       <option value="all">ทุกช่อง</option>
@@ -276,7 +278,7 @@ body.ro .w{display:none!important}
 <div class="summary" id="summary"></div>
 <main>
   <section class="list" aria-label="รายการเคลม">
-    <div class="head"><span id="listCount">กำลังโหลด…</span><span>เรียงตามเลขเคลม</span></div>
+    <div class="head"><span id="listCount">กำลังโหลด…</span><span class="ctl"><select id="listYear" aria-label="เลือกปี (จากเลขเคลม)" title="ปีจากเลขเคลม เช่น 25-xxxx = 2025"><option value="all">ทุกปี</option></select><button class="btn sm" type="button" id="btnSort" title="สลับการเรียงตามเลขเคลม">เลขเคลม เก่า → ใหม่</button></span></div>
     <div class="items" id="items"><div class="empty">กำลังดึงข้อมูลจาก Google Sheet…</div></div>
   </section>
   <section class="detail" id="detail">
@@ -421,6 +423,10 @@ const downloads={save:({filename,data})=>{const u=URL.createObjectURL(new Blob([
 let rows=[];            // [{id, ...fields}]
 let claims=new Map();   // claimNo -> {no, rows, qty, st:[...]}
 let selected=null, filter="all", editing=null;
+let sortDir=store("claim.sort")==="desc"?"desc":"asc", yearSel=store("claim.year")||"all";
+/* year of a claim: from the claim no. prefix (25-0123 -> 2025), else from the claim-form date */
+function claimYear(c){const m=/^(\d{2})-/.exec(c.no);if(m)return 2000+ +m[1];const d=c.rows.map(r=>pdate(r.vdate)).find(Boolean);return d?d.getFullYear():null}
+function inYear(c){return yearSel==="all"||String(claimYear(c))===yearSel}
 
 function store(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}}
 function toast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2600)}
@@ -563,21 +569,23 @@ function match(c,q,scope){
 function visibleClaims(){
   const q=low($("#q").value),scope=$("#scope").value,out=[];
   for(const c of claims.values()){
+    if(!inYear(c))continue;
     if(filter==="done"&&!c.done)continue;
     if(filter==="open"&&c.done)continue;
     if(filter==="problem"&&!c.problem)continue;
     const m=match(c,q,scope);if(m.ok)out.push({c,hit:m.hit});
   }
-  return out.sort((a,b)=>COLL.compare(a.c.no,b.c.no));
+  const dir=sortDir==="desc"?-1:1;
+  return out.sort((a,b)=>dir*COLL.compare(a.c.no,b.c.no));
 }
 
 /* ---------- render ---------- */
 function renderSummary(){
-  const all=[...claims.values()];
+  const all=[...claims.values()].filter(inYear);
   const n={all:all.length,open:all.filter(c=>!c.done).length,done:all.filter(c=>c.done).length,problem:all.filter(c=>c.problem).length};
   const lab={all:"เคลมทั้งหมด",open:"กำลังดำเนินการ",done:"ปิดครบ 4 ขั้นตอน",problem:"ต้องตรวจสอบ"};
   $("#summary").innerHTML=Object.keys(lab).map(k=>`<button type="button" class="sum${filter===k?" on":""}" data-f="${k}"><b>${n[k]}</b><span>${lab[k]}</span></button>`).join("")+
-   `<span class="sum" style="cursor:default"><b>${rows.length}</b><span>รายการ (หน่วยสินค้า)</span></span>`;
+   `<span class="sum" style="cursor:default"><b>${all.reduce((n,c)=>n+c.rows.length,0)}</b><span>รายการ (หน่วยสินค้า)</span></span>`;
 }
 function renderList(){
   const v=visibleClaims(),box=$("#items");
@@ -645,7 +653,14 @@ async function resolveAudit(){
   try{const ps=await user.profiles([sp.dataset.uid]);const nm=ps&&ps[sp.dataset.uid]&&ps[sp.dataset.uid].name;if(nm)sp.textContent=" โดย "+nm}catch(e){}
 }
 function pick(o,keys){const r={};for(const k of keys)r[k]=o[k]==null?"":o[k];return r}
-function renderAll(){rebuild();auditCache=null;dashCache=null;if($("#dlgDash")&&$("#dlgDash").open)renderDash();if(selected&&!claims.has(selected))selected=null;renderSummary();renderList();renderDetail()}
+function renderYears(){
+  const ys=[...new Set([...claims.values()].map(claimYear).filter(Boolean))].sort((a,b)=>b-a);
+  if(yearSel!=="all"&&!ys.includes(+yearSel))yearSel="all";
+  $("#listYear").innerHTML=`<option value="all">ทุกปี</option>`+ys.map(y=>`<option value="${y}">ปี ${y}</option>`).join("");
+  $("#listYear").value=yearSel;
+  $("#btnSort").textContent=sortDir==="desc"?"เลขเคลม ใหม่ → เก่า":"เลขเคลม เก่า → ใหม่";
+}
+function renderAll(){rebuild();renderYears();auditCache=null;dashCache=null;if($("#dlgDash")&&$("#dlgDash").open)renderDash();if(selected&&!claims.has(selected))selected=null;renderSummary();renderList();renderDetail()}
 
 /* ---------- edit dialog ---------- */
 function fieldHTML([k,l,col,type],v,ro){
@@ -1236,6 +1251,8 @@ $("#items").addEventListener("click",e=>{const b=e.target.closest(".item");if(!b
 $("#summary").addEventListener("click",e=>{const b=e.target.closest("[data-f]");if(!b)return;filter=b.dataset.f;renderSummary();renderList()});
 let qt;$("#q").addEventListener("input",()=>{clearTimeout(qt);qt=setTimeout(()=>{renderList();const v=visibleClaims();if(v.length===1){selected=v[0].c.no;renderList();renderDetail()}},150)});
 $("#scope").addEventListener("change",renderList);
+$("#listYear").addEventListener("change",e=>{yearSel=e.target.value;store("claim.year",yearSel);renderSummary();renderList();stampTime()});
+$("#btnSort").onclick=()=>{sortDir=sortDir==="desc"?"asc":"desc";store("claim.sort",sortDir);renderYears();renderList();stampTime();$("#items").scrollTop=0};
 selected=store("claim.sel")||null;
 
 function fromSheet(d){
