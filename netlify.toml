@@ -1,0 +1,31 @@
+# Netlify: หน้าเว็บอยู่ในโฟลเดอร์ web/ ข้อมูลมาจาก Google Apps Script (apps-script/Code.gs)
+[build]
+  publish = "web"
+  command = "node scripts/build-config.mjs"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    X-Robots-Tag = "noindex, nofollow"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://cdn.jsdelivr.net data: blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+
+# หน้าเว็บและค่าตั้งต้องเป็นเวอร์ชันล่าสุดเสมอหลัง deploy
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache"
+[[headers]]
+  for = "/config.js"
+  [headers.values]
+    Cache-Control = "no-cache"
