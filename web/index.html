@@ -40,6 +40,7 @@ window.addEventListener("error",function(e){var m="เกิดข้อผิ�
   --s1:#6b93ff; --s2:#3cc7b8; --s3:#f08a55; --s4:#a98bff; --s5:#a3adc2;
   --sh1:none; --sh2:0 1px 2px rgba(0,0,0,.3); --sh3:0 16px 40px rgba(0,0,0,.5); color-scheme:dark}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -260,6 +261,19 @@ label.f input.err{border-color:var(--bad)}
 .dg thead tr.g th{top:0}.dg thead tr+tr th{top:34px}
 .dbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .dbar input,.dbar select{padding:7px 10px;border:1px solid var(--line2);border-radius:var(--r-sm);background:var(--surface);min-width:0}
+/* paste from Excel */
+#dlgPaste{width:min(1280px,calc(100vw - 32px))}
+.steps{display:flex;gap:8px 18px;flex-wrap:wrap;margin:0;padding:0;list-style:none;font-size:13px;color:var(--muted)}
+.steps li{display:flex;gap:8px;align-items:center}
+.steps b{width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-size:12px;flex:none}
+#pxIn{width:100%;min-height:120px;padding:10px 12px;border:2px dashed var(--line2);border-radius:var(--r);background:var(--sunk);font-family:var(--f-mono);font-size:12px;resize:vertical;white-space:pre;overflow:auto}
+#pxIn:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+.pxsum{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.px td.st{white-space:normal;min-width:150px;max-width:240px}
+.px tr.skip td{color:var(--faint)}
+.px tr.bad td{background:color-mix(in srgb,var(--bad-soft) 70%,transparent)}
+.px td.wn{background:var(--warn-soft)}
+.px th small{display:block;font-family:var(--f-mono);font-weight:400;color:var(--faint)}
 a.cl{color:var(--accent);font-family:var(--f-mono);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 /* dashboard — chart series follow the validated reference palette */
 :root{--c1:#2a78d6;--c2:#eb6834;--c3:#1baf7a;--c4:#eda100;--grid:#e3e7e5;--seq:#2a78d6;--seq-soft:#cde2fb}
@@ -373,13 +387,14 @@ body.ro .w{display:none!important}
   <symbol id="i-print" viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="7" y="14" width="10" height="7"/></symbol>
   <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></symbol>
   <symbol id="i-sort" viewBox="0 0 24 24"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></symbol>
+  <symbol id="i-paste" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/></symbol>
   <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1 3h6l1-3h5"/><path d="M5 5h14l2 8v6H3v-6z"/></symbol>
 </svg>
 
 <header class="appbar">
   <div class="brand">
     <div class="logo" aria-hidden="true"><svg class="ic"><use href="#i-sun"/></svg></div>
-    <div><h1>ระบบติดตามงานเคลม<span class="ver">v2026.11.03-4</span></h1><span class="tag">SSC · SolarEdge Warranty Claim</span></div>
+    <div><h1>ระบบติดตามงานเคลม<span class="ver">v2026.11.03-5</span></h1><span class="tag">SSC · SolarEdge Warranty Claim</span></div>
   </div>
   <div class="userbox">
     <span class="role" id="roleBadge">ผู้ดู · อ่านอย่างเดียว</span>
@@ -409,6 +424,7 @@ body.ro .w{display:none!important}
     <span class="tb-sep w" aria-hidden="true"></span>
     <button class="btn w" id="btnDocs" type="button"><svg class="ic"><use href="#i-table"/></svg>กรอกเลขที่ใบเบิกทุกเคลม</button>
     <button class="btn w" id="btnAll" type="button"><svg class="ic"><use href="#i-edit"/></svg>กรอกรวมตามเลขเคลม</button>
+    <button class="btn w" id="btnPaste" type="button"><svg class="ic"><use href="#i-paste"/></svg>วางใบเคลมจาก Excel</button>
     <button class="btn primary w" id="btnNew" type="button"><svg class="ic"><use href="#i-plus"/></svg>เปิดใบเคลมใหม่</button>
   </div>
 </div>
@@ -494,6 +510,22 @@ body.ro .w{display:none!important}
     <span class="errtxt" id="dErr" style="margin-right:auto"></span>
     <button class="btn" type="button" id="dReset">ล้างที่แก้ไข</button>
     <button class="btn primary" type="button" id="dSave">บันทึกลงชีต</button>
+  </footer>
+</div></dialog>
+
+<dialog id="dlgPaste"><div class="dlg">
+  <header><h3>วางใบเคลมจาก Excel (คอลัมน์ A–J)</h3><button class="btn sm ghost" type="button" data-close>ปิด</button></header>
+  <div class="body">
+    <ol class="steps"><li><b>1</b>ใน Excel หรือ Google Sheet ลากเลือกคอลัมน์ A ถึง J ของแถวที่ต้องการ แล้วกด Ctrl+C (Mac: ⌘+C)</li><li><b>2</b>คลิกกล่องด้านล่าง แล้วกด Ctrl+V (⌘+V)</li><li><b>3</b>ตรวจตารางตัวอย่าง แล้วกด “บันทึกลงชีต”</li></ol>
+    <textarea id="pxIn" spellcheck="false" placeholder="วางข้อมูลตรงนี้ เรียงคอลัมน์ A–J: รหัสสินค้า · เลขใบสำคัญ · วันที่ใบสำคัญ · Case ID · SiteID · เลขเคลม · ชื่อบริษัท · วันนัดรับ · รหัสเซลล์ · จำนวน"></textarea>
+    <label class="hint" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="pxExpand" checked>สร้างแถวในชีตตาม “จำนวน” (1 แถว = 1 หน่วยสินค้า เหมือนตอนเปิดใบเคลมใหม่) ถ้าไม่ติ๊ก จะเพิ่ม 1 แถวต่อ 1 บรรทัดที่วาง</label>
+    <div class="pxsum" id="pxSum"></div>
+    <div id="pxBody"></div>
+  </div>
+  <footer>
+    <span class="errtxt" id="pxErr" style="margin-right:auto"></span>
+    <button class="btn" type="button" id="pxClear">ล้าง</button>
+    <button class="btn primary" type="button" id="pxSave" disabled>บันทึกลงชีต</button>
   </footer>
 </div></dialog>
 
@@ -829,7 +861,7 @@ function openRow(r,mode){
   $("#rowDelete").hidden=!(mode==="edit"||mode==="head");$("#rowDelete").textContent=mode==="head"?`ลบเคลมนี้ทั้งหมด (${claims.get(r.claimNo)?.rows.length||1} แถว)`:"ลบแถวนี้";delArmed=false;
   $("#rowTitle").textContent=mode==="new"?"เปิดใบเคลมใหม่":mode==="head"?`แก้ไขข้อมูลใบเคลม ${r.claimNo}`:mode==="add"?`เพิ่มหน่วยสินค้าในเคลม ${r.claimNo}`:`บันทึกขั้นตอน · เคลม ${r.claimNo}`;
   const stages=mode==="head"||mode==="new"?[STAGES[0]]:STAGES;
-  $("#rowBody").innerHTML=(mode==="new"?`<p class="hint" style="margin:0">ระบบจะสร้างแถวตาม “จำนวน” ให้อัตโนมัติ (1 แถว = 1 หน่วยสินค้า เหมือนในชีต) แล้วบันทึกขั้นตอน 2–5 ทีละหน่วยภายหลัง</p>`:"")+
+  $("#rowBody").innerHTML=(mode==="new"?`<p class="hint" style="margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span>มีหลายใบเคลม?</span><button class="btn sm" type="button" id="rowToPaste">${icon("paste")}วางจาก Excel ทีละหลายใบ</button></p><p class="hint" style="margin:0">ระบบจะสร้างแถวตาม “จำนวน” ให้อัตโนมัติ (1 แถว = 1 หน่วยสินค้า เหมือนในชีต) แล้วบันทึกขั้นตอน 2–5 ทีละหน่วยภายหลัง</p>`:"")+
    (mode==="head"?`<p class="hint" style="margin:0">ข้อมูลใบเคลมจะถูกแก้ในทุกหน่วยของเคลมนี้ (${claims.get(r.claimNo)?.rows.length||1} แถว)</p>`:"")+
    stages.map(s=>`<fieldset style="--sc:var(${s.c})"><legend>${s.k}. ${esc(s.t)} <span class="mono" style="font-weight:400;color:var(--muted)">${esc(s.dir)}</span></legend>
      <div class="grid">${s.f.map(x=>fieldHTML(x,r[x[0]],(mode==="add"||mode==="edit")&&s.k===1&&x[0]!=="pcode")).join("")}</div>
@@ -1406,6 +1438,77 @@ $("#btnTheme").onclick=()=>{const dark=document.documentElement.dataset.theme?do
 document.addEventListener("keydown",e=>{if(e.key==="/"&&!e.ctrlKey&&!e.metaKey&&!document.querySelector("dialog[open]")&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){e.preventDefault();$("#q").focus();$("#q").select()}});
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>b.closest("dialog").close());
 $("#btnNew").onclick=()=>openRow({...blank(),qty:"1"},"new");
+$("#rowBody").addEventListener("click",e=>{if(e.target.closest("#rowToPaste")){$("#dlgRow").close();openPaste()}});
+
+/* ---------- paste claim forms (columns A–J) from Excel / Google Sheets ---------- */
+const PX_F=STAGES[0].f; // A..J
+let px=null;
+function parseTSV(t){
+  const out=[];let row=[],cell="",q=false;
+  for(let i=0;i<t.length;i++){const ch=t[i];
+    if(q){if(ch==='"'){if(t[i+1]==='"'){cell+='"';i++}else q=false}else cell+=ch;continue}
+    if(ch==='"'&&cell===""){q=true;continue}
+    if(ch==="\t"){row.push(cell);cell="";continue}
+    if(ch==="\n"){row.push(cell);out.push(row);row=[];cell="";continue}
+    if(ch==="\r")continue;
+    cell+=ch}
+  row.push(cell);out.push(row);
+  return out.filter(r=>r.some(c=>norm(c)));
+}
+function pxDate(v){v=norm(v);if(!v)return {v:""};
+  let m=v.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);if(m)return {v:`${m[1].padStart(2,"0")}/${m[2].padStart(2,"0")}/${m[3]}`};
+  m=v.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);if(m)return {v:`${m[3].padStart(2,"0")}/${m[2].padStart(2,"0")}/${m[1]}`};
+  if(/^\d{5}$/.test(v)){const d=new Date(Date.UTC(1899,11,30)+(+v)*DAY);return {v:`${String(d.getUTCDate()).padStart(2,"0")}/${String(d.getUTCMonth()+1).padStart(2,"0")}/${d.getUTCFullYear()}`}}
+  return {v,warn:true}}
+function pxParse(){
+  const raw=$("#pxIn").value,expand=$("#pxExpand").checked;
+  const lines=parseTSV(raw).map(r=>r.slice(0,10));
+  const items=[];
+  for(const r of lines){
+    if(r.length<10)while(r.length<10)r.push("");
+    const o={};PX_F.forEach(([k],j)=>o[k]=norm(r[j]));
+    const isHead=!/\d/.test(o.claimNo)&&(/เลข|claim/i.test(o.claimNo)||/^รหัส/.test(o.pcode));
+    if(isHead)continue;
+    const it={o,st:"ok",msg:[],warn:{}};
+    const d=pxDate(o.vdate);o.vdate=d.v;if(d.warn){it.warn.vdate=1;it.msg.push("วันที่ใบสำคัญไม่ใช่ วว/ดด/ปปปป (จะบันทึกเป็นข้อความ)")}
+    if(o.qty&&!/^\d+$/.test(o.qty.replace(/,/g,""))){it.st="bad";it.msg.unshift("จำนวนต้องเป็นตัวเลข")}else o.qty=o.qty.replace(/,/g,"");
+    const q=parseInt(o.qty,10)||1;
+    if(q>200){it.st="bad";it.msg.unshift("จำนวนเกิน 200")}
+    if(!o.claimNo){it.st="bad";it.msg.unshift("ไม่มีเลขเคลม (คอลัมน์ F)")}
+    else if(claims.has(o.claimNo)&&it.st!=="bad"){it.st="skip";it.msg.unshift("มีเลขเคลมนี้ในระบบแล้ว · ข้าม")}
+    it.n=it.st==="ok"?(expand?q:1):0;
+    items.push(it)}
+  const cols=lines.length?Math.max(...lines.map(r=>r.length)):0;
+  px={items,expand};
+  const ok=items.filter(x=>x.st==="ok"),nClaim=new Set(ok.map(x=>x.o.claimNo)).size,nRow=ok.reduce((a,x)=>a+x.n,0);
+  const skip=items.filter(x=>x.st==="skip").length,bad=items.filter(x=>x.st==="bad").length;
+  $("#pxSum").innerHTML=items.length?`<span class="chip ok">พร้อมเพิ่ม ${nClaim} เลขเคลม · ${nRow} แถวในชีต</span>${skip?`<span class="chip none">ข้าม ${skip} บรรทัด (มีในระบบแล้ว)</span>`:""}${bad?`<span class="chip over">ต้องแก้ ${bad} บรรทัด (จะไม่บันทึก)</span>`:""}`:"";
+  $("#pxBody").innerHTML=items.length?`<div class="tablewrap" style="max-height:46vh"><table class="px"><thead><tr><th>#</th><th>สถานะ</th>${PX_F.map(([k,l,c])=>`<th><small>${c}</small>${esc(l.replace(/ \(คอลัมน์ .\)/,""))}</th>`).join("")}<th>แถวที่จะเพิ่ม</th></tr></thead><tbody>${items.map((x,i)=>`<tr class="${x.st==="ok"?"":x.st}"><td class="mono">${i+1}</td><td class="st">${x.st==="ok"?`<span class="chip ok">${x.msg.length?"เพิ่มได้ · มีคำเตือน":"เพิ่มได้"}</span>`:x.st==="skip"?`<span class="chip none">ข้าม</span>`:`<span class="chip over">ต้องแก้</span>`}${x.msg.length?`<span class="flag" style="color:${x.st==="ok"?"var(--warn)":x.st==="skip"?"var(--muted)":"var(--bad)"}">${x.msg.map(esc).join(" · ")}</span>`:""}</td>${PX_F.map(([k])=>`<td class="${/pcode|vno|caseId|refId|claimNo/.test(k)?"sn":""}${x.warn[k]?" wn":""}">${x.o[k]?esc(x.o[k]):`<span class="miss">–</span>`}</td>`).join("")}<td class="mono">${x.n||"–"}</td></tr>`).join("")}</tbody></table></div>`
+    :(norm(raw)?`<div class="empty">อ่านข้อมูลไม่ได้ ตรวจว่าคัดลอกจาก Excel/Google Sheet ตั้งแต่คอลัมน์ A ถึง J</div>`:"");
+  $("#pxErr").textContent=cols&&cols<10?`พบเพียง ${cols} คอลัมน์ ควรคัดลอกตั้งแต่คอลัมน์ A ถึง J ให้ครบ 10 คอลัมน์`:"";
+  $("#pxSave").disabled=!nRow;$("#pxSave").textContent=nRow?`บันทึก ${nClaim} เลขเคลม (${nRow} แถว) ลงชีต`:"บันทึกลงชีต";
+}
+function openPaste(){if(!canWrite){toast("บัญชีนี้ดูได้อย่างเดียว");return}$("#pxErr").textContent="";pxParse();$("#dlgPaste").showModal();$("#pxIn").focus()}
+$("#btnPaste").onclick=openPaste;
+let pxT;$("#pxIn").addEventListener("input",()=>{clearTimeout(pxT);pxT=setTimeout(pxParse,120)});
+$("#pxExpand").addEventListener("change",pxParse);
+$("#pxClear").onclick=()=>{$("#pxIn").value="";pxParse();$("#pxIn").focus()};
+$("#pxSave").onclick=async()=>{
+  if(!px)return;const ok=px.items.filter(x=>x.st==="ok");if(!ok.length)return;
+  // group by claim no. so one claim never splits across two requests (each request is all-or-nothing)
+  const by=new Map();for(const x of ok){if(!by.has(x.o.claimNo))by.set(x.o.claimNo,[]);for(let i=0;i<x.n;i++)by.get(x.o.claimNo).push({...x.o})}
+  const chunks=[];let cur=[];for(const list of by.values()){if(cur.length&&cur.length+list.length>300){chunks.push(cur);cur=[]}cur.push(...list)}if(cur.length)chunks.push(cur);
+  const btn=$("#pxSave");btn.disabled=true;$("#pxClear").disabled=true;let done=0;
+  try{
+    for(const ch of chunks){$("#pxErr").textContent=`กำลังบันทึก… ${done}/${chunks.reduce((a,c)=>a+c.length,0)} แถว`;await run("addRows",ch);done+=ch.length}
+    const first=by.keys().next().value;
+    $("#pxErr").textContent="";$("#pxIn").value="";$("#dlgPaste").close();
+    toast(`เพิ่ม ${by.size} เลขเคลม (${done} แถว) ลงชีตแล้ว`);selected=first;store("claim.sel",selected);auditOn=false;await load(true);
+  }catch(e){
+    $("#pxErr").textContent=(done?`บันทึกไปแล้ว ${done} แถว ส่วนที่เหลือยังไม่ได้บันทึก: `:"บันทึกไม่สำเร็จ: ")+((e&&e.message)||"ลองอีกครั้ง");
+    if(done){await load(true);pxParse()}
+  }finally{$("#pxClear").disabled=false;if($("#dlgPaste").open)btn.disabled=$("#pxSave").textContent==="บันทึกลงชีต"}
+};
 $("#btnAudit").onclick=()=>{auditOn=true;renderDetail();if(window.innerWidth<860)$("#detail").scrollIntoView({behavior:"smooth"})};
 $("#items").addEventListener("click",e=>{const b=e.target.closest(".item");if(!b)return;auditOn=false;selected=b.dataset.no;store("claim.sel",selected);renderList();renderDetail();if(window.innerWidth<860)$("#detail").scrollIntoView({behavior:"smooth"})});
 $("#summary").addEventListener("click",e=>{const b=e.target.closest("[data-f]");if(!b)return;filter=b.dataset.f;renderSummary();renderList()});
