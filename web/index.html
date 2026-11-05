@@ -247,7 +247,7 @@ label.f input.err{border-color:var(--bad)}
 .bulk .row2 input,.bulk .row2 select{padding:6px 8px;border:1px solid var(--line2);border-radius:6px;background:var(--surface);min-width:0;flex:1}
 .bt td{padding:3px 4px}
 .bt input{width:100%;min-width:120px;padding:5px 7px;border:1px solid var(--line2);border-radius:5px;background:var(--surface);font-family:var(--f-mono);font-size:12.5px}
-.bt input.dup{border-color:var(--bad);background:var(--bad-soft)}
+.bt input.dup{border-color:var(--warn);background:var(--warn-soft,rgba(184,120,20,.14))}
 .bt tr.del td{opacity:.45;text-decoration:line-through}
 .bt tr.new td:first-child{color:var(--ok);font-weight:600}
 .bt tr.hit td{background:var(--ok-soft,rgba(31,122,110,.16));transition:background .2s}
@@ -432,7 +432,7 @@ body.ro .w{display:none!important}
 <header class="appbar">
   <div class="brand">
     <div class="logo" aria-hidden="true"><svg class="ic"><use href="#i-sun"/></svg></div>
-    <div><h1>ระบบติดตามงานเคลม<span class="ver">v2026.11.03-7</span></h1><span class="tag">SSC · SolarEdge Warranty Claim</span></div>
+    <div><h1>ระบบติดตามงานเคลม<span class="ver">v2026.11.05-1</span></h1><span class="tag">SSC · SolarEdge Warranty Claim</span></div>
   </div>
   <div class="userbox">
     <span class="role" id="roleBadge">ผู้ดู · อ่านอย่างเดียว</span>
@@ -701,7 +701,6 @@ function rebuild(){
     c.problem=req.some(x=>x.cls==="over")||c.flags>0;
     const dup=new Set();c.dupSn=[];
     for(const r of c.rows){const s=low(r.issSn);if(s){if(dup.has(s))c.dupSn.push(r.issSn);dup.add(s)}}
-    if(c.dupSn.length)c.problem=true;
   }
 }
 
@@ -717,7 +716,7 @@ const ACATS=[
  {id:"notRet",t:"เบิกแล้ว ยังไม่คืน",d:"มี SN เบิก แต่ไม่มี SN คืน (ขั้นตอน 3)",sev:"--warn"},
  {id:"notRcv",t:"คืนแล้ว ยังไม่ได้รับ",d:"มี SN คืน แต่ไม่มี SN รับ (ขั้นตอน 4)",sev:"--warn"},
  {id:"skip",t:"ข้ามขั้นตอน",d:"มี SN คืน/รับ แต่ไม่มี SN เบิก",sev:"--bad"},
- {id:"dup",t:"SN ซ้ำ",d:"SN เดียวกันถูกบันทึกมากกว่า 1 แถวในขั้นตอนเดียวกัน",sev:"--bad"},
+ {id:"dup",t:"SN ซ้ำ",d:"SN เดียวกันถูกบันทึกมากกว่า 1 แถวในขั้นตอนเดียวกัน (อนุญาตให้ซ้ำได้)",sev:"--info"},
  {id:"zq",t:"SN จ่าย ไม่ตรงกับ SN คืน",d:"SN จ่าย (Z) ไม่พบใน SN คืนของเคลมนี้",sev:"--bad"},
  {id:"typo",t:"SN น่าจะพิมพ์ผิด",d:"ตรงกันเมื่อตัดช่องว่าง หรือแทน O ด้วย 0",sev:"--warn"},
  {id:"swap",t:"SN จ่ายสลับแถว",d:"SN จ่ายตรงกับ SN คืนของอีกแถวในเคลมเดียวกัน",sev:"--info"},
@@ -852,7 +851,7 @@ function renderDetail(){
     </div>
     ${(()=>{const ok=c.st.slice(0,4).filter(x=>x.cls==="ok").length;return `<div class="prog"><div class="bar"><i style="width:${ok*25}%"></i></div><span>ครบ ${ok}/4 ขั้นตอนหลัก · ${c.rows.length} หน่วยสินค้า</span></div>`})()}
     <div class="kv">${STAGES[0].f.filter(x=>x[0]!=="claimNo"&&x[0]!=="company").map(([k,l])=>`<div><small>${esc(l)}</small><span class="${/pcode|vno|caseId|refId/.test(k)?"mono":""}">${cell(h,k)}</span></div>`).join("")}</div>
-    ${c.dupSn.length?`<p class="errtxt">SN เบิกซ้ำในเคลมนี้: ${c.dupSn.map(esc).join(", ")}</p>`:""}
+    ${c.dupSn.length?`<p class="hint">SN เบิกซ้ำในเคลมนี้ (บันทึกได้): ${c.dupSn.map(esc).join(", ")}</p>`:""}
     ${last&&last.updatedAt?`<p class="audit" id="audit">${icon("clock")}แก้ไขล่าสุด ${new Date(last.updatedAt).toLocaleString("th-TH")}<span data-uid="${esc(last.updatedBy||"")}"></span></p>`:""}
   </div>
   <div class="card">
@@ -936,8 +935,7 @@ function validate(o,mode){
   if(mode==="new"&&claims.has(o.claimNo))errs.push(`เลขเคลม ${o.claimNo} มีอยู่แล้ว ให้เปิดเคลมนั้นแล้วกด “เพิ่มหน่วยสินค้า”`);
   if(mode==="new"&&!(parseInt(o.qty,10)>0))errs.push("จำนวนต้องมากกว่า 0");
   if(mode==="new"&&parseInt(o.qty,10)>200)errs.push("จำนวนต่อเคลมต้องไม่เกิน 200");
-  const snKeys=["issSn","retSn","rcvSn","okSn"];
-  for(const k of snKeys){if(!o[k]||(editing.r&&low(o[k])===low(editing.r[k])))continue;const dup=rows.find(r=>r.id!==(editing.r&&editing.r.id)&&low(r[k])===low(o[k]));if(dup)errs.push(`${LABEL[k]} ${o[k]} ถูกบันทึกแล้วในเคลม ${dup.claimNo}`)}
+  // SN ซ้ำกับแถวอื่นบันทึกได้ (Admin ใช้ SN เดิมซ้ำได้ทุกขั้นตอน)
   return errs;
 }
 async function stamp(o){return o}
@@ -1045,8 +1043,8 @@ function bulkDupes(){
     const groups=new Map(),changed=it=>!it.r||low(it.v[sk])!==low(it.r[sk]);
     bulk.items.forEach((it,i)=>{if(it.del)return;const v=low(it.v[sk]);if(!v||isNote(v))return;if(!groups.has(v))groups.set(v,[]);groups.get(v).push(i)});
     for(const [v,idx] of groups){if(idx.length<2)continue;idx.forEach(i=>bad.add(sk+":"+i));
-      if(idx.some(i=>changed(bulk.items[i])))msgs.push(`${LABEL[sk]} ${bulk.items[idx[0]].v[sk]} ซ้ำกัน ${idx.length} แถว`);else warns.push(`${LABEL[sk]} ${bulk.items[idx[0]].v[sk]} ซ้ำอยู่เดิมในชีต`)}
-    bulk.items.forEach((it,i)=>{if(it.del)return;const v=low(it.v[sk]);if(!v||isNote(v)||(it.r&&v===low(it.r[sk])))return;const d=rows.find(r=>!mine.has(r.id)&&low(r[sk])===v);if(d){bad.add(sk+":"+i);msgs.push(`${it.v[sk]} มีอยู่แล้วในเคลม ${d.claimNo}`)}});
+      warns.push(`${LABEL[sk]} ${bulk.items[idx[0]].v[sk]} ซ้ำ ${idx.length} แถว${idx.some(i=>changed(bulk.items[i]))?"":" (มีอยู่เดิมในชีต)"}`)}
+    bulk.items.forEach((it,i)=>{if(it.del)return;const v=low(it.v[sk]);if(!v||isNote(v)||(it.r&&v===low(it.r[sk])))return;const d=rows.find(r=>!mine.has(r.id)&&low(r[sk])===v);if(d){bad.add(sk+":"+i);warns.push(`${it.v[sk]} มีอยู่แล้วในเคลม ${d.claimNo}`)}});
   }
   return {bad,msgs,warns};
 }
@@ -1054,7 +1052,7 @@ function renderBulk(){
   const {F,ks,items,all}=bulk,{bad}=bulkDupes(),ref=!all&&ks[0]>2?"issSn":null;
   const live=items.filter(it=>!it.del);
   const w=bulkDupes().warns;
-  $("#stCount").textContent=(w.length?`⚠ ${w.slice(0,3).join(" · ")}${w.length>3?` (+${w.length-3})`:""} · `:"")+bulk.snKeys.map(k=>`${LABEL[k]} ${live.filter(it=>norm(it.v[k])).length}/${live.length}`).join(" · ")+(items.some(it=>it.del)?` · จะลบ ${items.filter(it=>it.del).length} แถว`:"")+(items.some(it=>!it.r&&!it.del)?` · แถวใหม่ ${items.filter(it=>!it.r&&!it.del).length}`:"");
+  $("#stCount").textContent=(w.length?`⚠ SN ซ้ำ (บันทึกได้): ${w.slice(0,3).join(" · ")}${w.length>3?` (+${w.length-3})`:""} · `:"")+bulk.snKeys.map(k=>`${LABEL[k]} ${live.filter(it=>norm(it.v[k])).length}/${live.length}`).join(" · ")+(items.some(it=>it.del)?` · จะลบ ${items.filter(it=>it.del).length} แถว`:"")+(items.some(it=>!it.r&&!it.del)?` · แถวใหม่ ${items.filter(it=>!it.r&&!it.del).length}`:"");
   const groups=ks.map(k=>({k,n:F.filter(f=>f.st===k).length}));
   $("#stBody").innerHTML=`<div class="tablewrap" style="max-height:${all?46:52}vh"><table class="bt"><thead>
    ${all?`<tr class="g"><th colspan="3"></th>${groups.map(g=>`<th colspan="${g.n}" style="--sc:var(${STAGES[g.k-1].c})">${g.k}. ${esc(STAGES[g.k-1].sub)}</th>`).join("")}<th></th></tr>`:""}
@@ -1119,11 +1117,11 @@ function bulkScan(raw){
   const live=bulk.items.map((it,i)=>({it,i})).filter(x=>!x.it.del);
   const flash=(i,cls)=>{const tr=$("#stBody").querySelector(`tr[data-ri="${i}"]`);if(!tr)return;tr.classList.add(cls);tr.scrollIntoView({block:"nearest"});setTimeout(()=>tr.classList.remove(cls),1600)};
   const done=res=>{beep(res.ok);return res};
+  // SN ซ้ำเติมได้ แค่แจ้งเตือน
   const same=live.find(x=>low(x.it.v[key])===v);
-  if(same){flash(same.i,"hitbad");return done({ok:false,msg:`✗ ${sn} ซ้ำ · สแกนแล้วที่แถว ${same.i+1}`})}
   const mine=new Set(bulk.items.filter(it=>it.r).map(it=>it.r.id));
   const d=rows.find(r=>!mine.has(r.id)&&low(r[key])===v);
-  if(d)return done({ok:false,msg:`✗ ${sn} มีอยู่แล้วในเคลม ${d.claimNo} (${lbl}) ไม่ได้เติม`});
+  const dupNote=same?` · ซ้ำกับแถว ${same.i+1}`:d?` · ซ้ำกับเคลม ${d.claimNo}`:"";
   const empty=live.filter(x=>!norm(x.it.v[key]));
   const match=empty.find(x=>SN_KEYS.some(k=>k!==key&&low(val(x.it,k))===v));
   let i,note="";
@@ -1133,21 +1131,21 @@ function bulkScan(raw){
   bulk.items[i].v[key]=sn;bulk.scanN++;
   renderBulk();flash(i,"hit");
   const left=bulk.items.filter(it=>!it.del&&!norm(it.v[key])).length;
-  return done({ok:true,warn:!!note&&!match,msg:`✓ ${sn} → แถว ${i+1}${note}${fixed?" · แปลงจากแป้นภาษาไทยให้แล้ว":""} · สแกนแล้ว ${bulk.scanN} ตัว · ${lbl} ยังว่าง ${left} แถว`});
+  return done({ok:true,warn:(!!note&&!match)||!!dupNote,msg:`✓ ${sn} → แถว ${i+1}${note}${dupNote}${fixed?" · แปลงจากแป้นภาษาไทยให้แล้ว":""} · สแกนแล้ว ${bulk.scanN} ตัว · ${lbl} ยังว่าง ${left} แถว`});
 }
 // dlgRow: Enter from a scanner in an SN field must not submit the form; check for duplicates and move on.
 function rowSnCheck(k,sn){
   const d=rows.find(r=>r.id!==(editing.r&&editing.r.id)&&low(r[k])===low(sn));
-  return d?{ok:false,msg:`${LABEL[k]} ${sn} ถูกบันทึกแล้วในเคลม ${d.claimNo}`}:{ok:true,msg:`✓ ${LABEL[k]} ${sn}`};
+  return d?{ok:true,warn:true,msg:`✓ ${LABEL[k]} ${sn} · ซ้ำกับเคลม ${d.claimNo} (บันทึกได้)`}:{ok:true,msg:`✓ ${LABEL[k]} ${sn}`};
 }
 function rowNextField(inp){const all=[...$("#rowBody").querySelectorAll("input:not([readonly])")];const nx=all[all.indexOf(inp)+1];if(nx){nx.focus();if(nx.select)nx.select()}else $("#rowSave").focus()}
 $("#rowBody").addEventListener("keydown",e=>{
   const inp=e.target;if(e.key!=="Enter"||!inp.matches||!inp.matches("input")||!SN_KEYS.includes(inp.name))return;
   e.preventDefault();const {sn,fixed}=cleanSn(inp.value);if(!sn){rowNextField(inp);return}
-  if(fixed)inp.value=sn;const res=rowSnCheck(inp.name,sn);beep(res.ok);$("#rowErr").textContent=res.ok?"":res.msg;if(res.ok)rowNextField(inp);else inp.select();
+  if(fixed)inp.value=sn;const res=rowSnCheck(inp.name,sn);beep(res.ok);$("#rowErr").textContent=res.warn?res.msg:res.ok?"":res.msg;if(res.ok)rowNextField(inp);else inp.select();
 });
 $("#rowBody").addEventListener("click",e=>{const b=e.target.closest("[data-cam]");if(!b)return;e.preventDefault();const k=b.dataset.cam;
-  openCam(`สแกน ${LABEL[k]}`,raw=>{const {sn}=cleanSn(raw);if(!sn)return null;const res=rowSnCheck(k,sn);beep(res.ok);if(res.ok){$("#f_"+k).value=sn;$("#rowErr").textContent=""}return res},true)});
+  openCam(`สแกน ${LABEL[k]}`,raw=>{const {sn}=cleanSn(raw);if(!sn)return null;const res=rowSnCheck(k,sn);beep(res.ok);if(res.ok){$("#f_"+k).value=sn;$("#rowErr").textContent=res.warn?res.msg:""}return res},true)});
 // camera
 let cam=null,camCtl=null;
 async function openCam(title,onCode,once){
